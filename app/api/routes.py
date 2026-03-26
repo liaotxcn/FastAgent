@@ -17,6 +17,10 @@ async def execute_agent(request: AgentExecuteRequest):
             return AgentResponse(
                 success=False,
                 message="Unknown agent type",
+                data={
+                    "input": request.task,
+                    "output": ""
+                },
                 error=f"Unknown agent type: {request.agent_type}"
             )
         
@@ -26,12 +30,20 @@ async def execute_agent(request: AgentExecuteRequest):
         return AgentResponse(
             success=False,
             message="Validation error",
+            data={
+                "input": request.task if hasattr(request, 'task') else "",
+                "output": ""
+            },
             error=str(e)
         )
     except Exception as e:
         return AgentResponse(
             success=False,
             message="Task execution failed",
+            data={
+                "input": request.task if hasattr(request, 'task') else "",
+                "output": ""
+            },
             error=str(e)
         )
 
@@ -45,7 +57,11 @@ async def execute_mcp_tool(request: MCPToolRequest):
     return AgentResponse(
         success=True,
         message="MCP tool executed",
-        data={"result": result}
+        data={
+            "input": f"Tool: {request.tool_name}, Params: {request.parameters}",
+            "output": result
+        },
+        error=None
     )
 
 @router.post("/agent/database/query", response_model=AgentResponse)
@@ -58,7 +74,11 @@ async def execute_database_query(request: DatabaseQueryRequest):
     return AgentResponse(
         success=True,
         message="Database query executed",
-        data={"result": result}
+        data={
+            "input": request.query,
+            "output": result
+        },
+        error=None
     )
 
 @router.get("/agent/health")
@@ -66,5 +86,9 @@ async def health_check():
     return AgentResponse(
         success=True,
         message="Agent system is healthy",
-        data={"status": "running"}
+        data={
+            "input": "Health check",
+            "output": "Agent system is running"
+        },
+        error=None
     )
