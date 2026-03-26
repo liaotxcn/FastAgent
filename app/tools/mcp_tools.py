@@ -1,6 +1,6 @@
 from langchain.tools import BaseTool
 from typing import Type, Optional
-from pydantic import BaseModel, Field
+from pydantic.v1 import BaseModel, Field
 import httpx
 from app.config import settings
 
@@ -9,8 +9,8 @@ class MCPToolInput(BaseModel):
     parameters: dict = Field(description="Parameters for the MCP tool")
 
 class MCPToolWrapper(BaseTool):
-    name = "mcp_tool"
-    description = "Execute MCP (Model Context Protocol) tools to perform various tasks"
+    name = settings.mcp_tool_name
+    description = settings.mcp_tool_description
     args_schema: Type[BaseModel] = MCPToolInput
     
     async def _arun(self, tool_name: str, parameters: dict) -> str:
@@ -19,7 +19,7 @@ class MCPToolWrapper(BaseTool):
                 response = await client.post(
                     f"{settings.mcp_server_url}/tools/{tool_name}",
                     json=parameters,
-                    timeout=30.0
+                    timeout=settings.mcp_request_timeout
                 )
                 response.raise_for_status()
                 return f"MCP tool '{tool_name}' executed successfully: {response.json()}"

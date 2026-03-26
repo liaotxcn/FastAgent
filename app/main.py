@@ -8,9 +8,9 @@ logging.basicConfig(level=settings.log_level)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(
-    title="FastAgent System",
-    description="A powerful Agent system built with FastAPI and LangChain",
-    version="1.0.0"
+    title=settings.app_title,
+    description=settings.app_description,
+    version=settings.app_version
 )
 
 app.add_middleware(
@@ -34,8 +34,8 @@ async def shutdown_event():
 @app.get("/")
 async def root():
     return {
-        "message": "Welcome to FastAgent System",
-        "version": "1.0.0",
+        "message": f"Welcome to {settings.app_title}",
+        "version": settings.app_version,
         "docs": "/docs"
     }
 
@@ -43,7 +43,7 @@ if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True
+        host=settings.server_host,
+        port=settings.server_port,
+        reload=settings.server_reload
     )

@@ -10,7 +10,7 @@ import re
 import json
 
 class BaseAgent(ABC):
-    def __init__(self, model_name: str = None, temperature: float = 0.3):
+    def __init__(self, model_name: str = None, temperature: float = None):
         model = model_name or settings.modelscope_model_id
         self.llm = ChatOpenAI(
             model=model,
@@ -59,7 +59,7 @@ Thought: {agent_scratchpad}
             tools=self.tools, 
             verbose=True,
             return_only_outputs=False,
-            max_iterations=10,
+            max_iterations=settings.agent_max_iterations,
             early_stopping_method="force",
             handle_parsing_errors=True
         )
@@ -150,10 +150,17 @@ Thought: {agent_scratchpad}
                     history.result = json.dumps(result)
                     await session.commit()
             
+            # 确保 data 对象包含 input 和 output 属性
+            data = result or {}
+            if "input" not in data:
+                data["input"] = task
+            if "output" not in data:
+                data["output"] = data.get("result", "")
+            
             return {
                 "success": True,
                 "message": "Task completed successfully",
-                "data": result or {},
+                "data": data,
                 "error": None
             }
         except Exception as e:
@@ -199,6 +206,9 @@ Thought: {agent_scratchpad}
             return {
                 "success": False,
                 "message": "Task failed",
-                "data": {},
+                "data": {
+                    "input": task,
+                    "output": ""
+                },
                 "error": str(e)
             }
