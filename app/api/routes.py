@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from pydantic import ValidationError
 from app.models.schemas import AgentResponse, AgentExecuteRequest, MCPToolRequest, DatabaseQueryRequest
 from app.agent.mcp_agent import MCPAgent
 from app.agent.db_agent import DatabaseAgent
@@ -21,6 +22,12 @@ async def execute_agent(request: AgentExecuteRequest):
         
         result = await agent.execute(request.task, request.context)
         return AgentResponse(**result)
+    except ValidationError as e:
+        return AgentResponse(
+            success=False,
+            message="Validation error",
+            error=str(e)
+        )
     except Exception as e:
         return AgentResponse(
             success=False,
