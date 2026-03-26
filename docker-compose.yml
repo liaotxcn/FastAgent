@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  fastagent:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      - MODELscope_api_key=${MODELscope_api_key}
+      - MODELscope_api_base=${MODELscope_api_base}
+      - MODELscope_model_id=${MODELscope_model_id}
+      - DATABASE_URL=${DATABASE_URL}
+      - MCP_server_url=${MCP_server_url}
+      - LOG_level=${LOG_level}
+    depends_on:
+      - db
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=123456
+      - MYSQL_DATABASE=fastagent
+      - MYSQL_USER=fastagent
+      - MYSQL_PASSWORD=123456
+    volumes:
+      - mysql_data:/var/lib/mysql
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
