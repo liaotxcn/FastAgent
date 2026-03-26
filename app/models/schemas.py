@@ -39,9 +39,14 @@ class MCPToolRequest(BaseModel):
 class DatabaseQueryRequest(BaseModel):
     query: str = Field(..., description="SQL query to execute")
     params: Optional[Dict[str, Any]] = None
+    limit: Optional[int] = Field(default=100, ge=1, le=1000, description="Maximum number of rows to return")
     
     @field_validator('query')
     def validate_sql_query(cls, v):
+        # 白名单机制：只允许 SELECT 查询
+        if not re.match(r'^\s*SELECT\s', v, re.IGNORECASE):
+            raise ValueError("Only SELECT queries are allowed")
+        
         # 检测潜在的 SQL 注入攻击
         dangerous_patterns = [
             r'\b(DROP|ALTER|TRUNCATE|INSERT|UPDATE|DELETE|CREATE|RENAME|REPLACE|GRANT|REVOKE)\b',

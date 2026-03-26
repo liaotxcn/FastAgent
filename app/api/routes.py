@@ -53,7 +53,7 @@ async def execute_database_query(request: DatabaseQueryRequest):
     from app.tools.db_tools import DatabaseQueryTool
     
     tool = DatabaseQueryTool()
-    result = await tool._arun(request.query, request.params)
+    result = await tool._arun(request.query, request.params, request.limit)
     
     return AgentResponse(
         success=True,
