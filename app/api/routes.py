@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import ValidationError
-from app.models.schemas import AgentResponse, AgentExecuteRequest, MCPToolRequest, DatabaseQueryRequest
+from app.models.schemas import AgentResponse, AgentExecuteRequest, MCPToolRequest, DatabaseQueryRequest, ChatRequest
 from app.agent.mcp_agent import MCPAgent
 from app.agent.db_agent import DatabaseAgent
+from app.agent.router_agent import RouterAgent
 from loguru import logger
 
 router = APIRouter(prefix="/api/v1", tags=["agents"])
@@ -83,6 +84,29 @@ async def execute_database_query(request: DatabaseQueryRequest):
         },
         error=None
     )
+
+@router.post("/agent/chat", response_model=AgentResponse)
+async def smart_chat(request: ChatRequest):
+    try:
+        router_agent = RouterAgent()
+        result = await router_agent.execute(request.message, request.context)
+        return AgentResponse(**result)
+    except ValidationError as e:
+        logger.error(f"Validation error: {e}")
+        return AgentResponse(
+            success=False,
+            message="Validation error",
+            data={"input": request.message, "output": ""},
+            error=str(e)
+        )
+    except Exception as e:
+        logger.exception(f"Chat execution failed: {e}")
+        return AgentResponse(
+            success=False,
+            message="Chat execution failed",
+            data={"input": request.message, "output": ""},
+            error=str(e)
+        )
 
 @router.get("/agent/health")
 async def health_check():
