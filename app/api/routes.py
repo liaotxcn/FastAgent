@@ -91,7 +91,8 @@ async def health_check():
         message="Agent system is healthy",
         data={
             "input": "Health check",
-            "output": "Agent system is running"
+            "output": "Agent system is running",
+            "status": "running"
         },
         error=None
     )
