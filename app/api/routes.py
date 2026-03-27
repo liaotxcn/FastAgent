@@ -3,6 +3,7 @@ from pydantic import ValidationError
 from app.models.schemas import AgentResponse, AgentExecuteRequest, MCPToolRequest, DatabaseQueryRequest
 from app.agent.mcp_agent import MCPAgent
 from app.agent.db_agent import DatabaseAgent
+from loguru import logger
 
 router = APIRouter(prefix="/api/v1", tags=["agents"])
 
@@ -27,6 +28,7 @@ async def execute_agent(request: AgentExecuteRequest):
         result = await agent.execute(request.task, request.context)
         return AgentResponse(**result)
     except ValidationError as e:
+        logger.error(f"Validation error: {e}")
         return AgentResponse(
             success=False,
             message="Validation error",
@@ -37,6 +39,7 @@ async def execute_agent(request: AgentExecuteRequest):
             error=str(e)
         )
     except Exception as e:
+        logger.exception(f"Task execution failed: {e}")
         return AgentResponse(
             success=False,
             message="Task execution failed",
@@ -88,7 +91,8 @@ async def health_check():
         message="Agent system is healthy",
         data={
             "input": "Health check",
-            "output": "Agent system is running"
+            "output": "Agent system is running",
+            "status": "running"
         },
         error=None
     )

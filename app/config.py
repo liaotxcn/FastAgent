@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from loguru import logger
 
 class Settings(BaseSettings):
     # ModelScope 配置
@@ -44,4 +45,10 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = False
 
-settings = Settings()
+# 加载配置
+try:
+    settings = Settings()
+    logger.info("Configuration loaded successfully")
+except Exception as e:
+    logger.exception(f"Failed to load configuration: {str(e)}")
+    raise
