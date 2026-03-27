@@ -6,15 +6,17 @@ from langchain.prompts import PromptTemplate
 from app.config import settings
 from app.database.connection import AsyncSessionLocal
 from app.database.models import AgentCallHistory
+from loguru import logger
 import re
 import json
 
 class BaseAgent(ABC):
     def __init__(self, model_name: str = None, temperature: float = None):
         model = model_name or settings.modelscope_model_id
+        temp = temperature if temperature is not None else settings.agent_temperature
         self.llm = ChatOpenAI(
             model=model,
-            temperature=temperature,
+            temperature=temp,
             openai_api_key=settings.modelscope_api_key,
             openai_api_base=settings.modelscope_api_base
         )
@@ -76,6 +78,7 @@ Thought: {agent_scratchpad}
             tool_names = ", ".join([tool.name for tool in self.tools])
             
             # 记录调用开始
+            logger.info(f"Starting agent execution: {self.__class__.__name__}, task: {task}")
             async with AsyncSessionLocal() as session:
                 history = AgentCallHistory(
                     agent_type=self.__class__.__name__,
@@ -165,6 +168,7 @@ Thought: {agent_scratchpad}
             }
         except Exception as e:
             error_msg = str(e)
+            logger.exception(f"Agent execution failed: {error_msg}")
             # 记录调用失败
             if history_id:
                 async with AsyncSessionLocal() as session:

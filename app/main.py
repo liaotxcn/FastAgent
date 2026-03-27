@@ -2,10 +2,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import router
 from app.config import settings
-import logging
+from loguru import logger
 
-logging.basicConfig(level=settings.log_level)
-logger = logging.getLogger(__name__)
+# 配置 Loguru 日志
+logger.add("app.log", rotation="10 MB", level=settings.log_level)
 
 app = FastAPI(
     title=settings.app_title,
