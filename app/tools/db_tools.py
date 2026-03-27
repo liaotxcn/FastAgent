@@ -9,9 +9,17 @@ from loguru import logger
 import re
 
 class DatabaseQueryInput(BaseModel):
-    query: str = Field(description="SQL query to execute")
+    query: str = Field(
+        description="SQL query to execute",
+        min_length=5
+    )
     params: Optional[dict] = Field(default=None, description="Query parameters")
-    limit: Optional[int] = Field(default=None, ge=1, le=1000, description="Maximum number of rows to return")
+    limit: Optional[int] = Field(
+        default=None, 
+        ge=1, 
+        le=1000, 
+        description="Maximum number of rows to return"
+    )
     
     @validator('query')
     def validate_sql_query(cls, v):
