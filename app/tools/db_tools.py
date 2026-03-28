@@ -60,8 +60,8 @@ class DatabaseQueryTool(BaseTool):
             try:
                 result = await session.execute(text(query), params or {})
                 # 限制返回结果的行数
-                rows = result.fetchmany(actual_limit)
-                columns = result.keys()
+                rows = result.fetchmany(actual_limit) or []
+                columns = result.keys() or []
                 
                 formatted_results = []
                 for row in rows:
