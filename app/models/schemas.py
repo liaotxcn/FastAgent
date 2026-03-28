@@ -82,7 +82,8 @@ class AgentExecuteRequest(BaseModel):
     agent_type: str = Field(
         ..., 
         description="Type of agent to use",
-        pattern=r'^(mcp|database)$'
+        pattern=r'^(mcp|database|general)$'
+
 
     )
     context: Optional[Dict[str, Any]] = None
@@ -93,3 +94,17 @@ class AgentExecuteRequest(BaseModel):
         if v not in valid_types:
             raise ValueError(f"Invalid agent type, must be one of: {valid_types}")
         return v
+
+class ChatRequest(BaseModel):
+    message: str = Field(
+        ..., 
+        description="User's chat message",
+        min_length=1,
+        max_length=1000
+    )
+    session_id: Optional[str] = Field(
+        None, 
+        description="Session ID for multi-turn conversations",
+        max_length=100
+    )
+    context: Optional[Dict[str, Any]] = None

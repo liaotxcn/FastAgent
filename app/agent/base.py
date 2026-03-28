@@ -74,8 +74,9 @@ Thought: {agent_scratchpad}
         history_id = None
         try:
             # 构建工具描述
-            tools_description = "\n".join([f"- {tool.name}: {tool.description}" for tool in self.tools])
-            tool_names = ", ".join([tool.name for tool in self.tools])
+            tools = self.tools or []
+            tools_description = "\n".join([f"- {tool.name}: {tool.description}" for tool in tools])
+            tool_names = ", ".join([tool.name for tool in tools])
             
             # 记录调用开始
             logger.info(f"Starting agent execution: {self.__class__.__name__}, task: {task}")

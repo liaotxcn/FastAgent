@@ -1,8 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import ValidationError
-from app.models.schemas import AgentResponse, AgentExecuteRequest, MCPToolRequest, DatabaseQueryRequest
+from app.models.schemas import AgentResponse, AgentExecuteRequest, MCPToolRequest, DatabaseQueryRequest, ChatRequest
 from app.agent.mcp_agent import MCPAgent
 from app.agent.db_agent import DatabaseAgent
+from app.agent.router_agent import RouterAgent
+from app.services.redis_service import redis_service
 from loguru import logger
 
 router = APIRouter(prefix="/api/v1", tags=["agents"])
@@ -84,6 +86,36 @@ async def execute_database_query(request: DatabaseQueryRequest):
         error=None
     )
 
+@router.post("/agent/chat", response_model=AgentResponse)
+async def smart_chat(request: ChatRequest):
+    try:
+        session_id = request.session_id
+        if not session_id:
+            session_id = redis_service.create_session()
+        
+        router_agent = RouterAgent()
+        result = await router_agent.execute(request.message, request.context, session_id)
+        
+        result["data"]["session_id"] = session_id
+        
+        return AgentResponse(**result)
+    except ValidationError as e:
+        logger.error(f"Validation error: {e}")
+        return AgentResponse(
+            success=False,
+            message="Validation error",
+            data={"input": request.message, "output": ""},
+            error=str(e)
+        )
+    except Exception as e:
+        logger.exception(f"Chat execution failed: {e}")
+        return AgentResponse(
+            success=False,
+            message="Chat execution failed",
+            data={"input": request.message, "output": ""},
+            error=str(e)
+        )
+
 @router.get("/agent/health")
 async def health_check():
     return AgentResponse(
@@ -96,3 +128,105 @@ async def health_check():
         },
         error=None
     )
+
+@router.post("/chat/session")
+async def create_session():
+    try:
+        session_id = redis_service.create_session()
+        return AgentResponse(
+            success=True,
+            message="Session created successfully",
+            data={"session_id": session_id},
+            error=None
+        )
+    except Exception as e:
+        logger.exception(f"Failed to create session: {e}")
+        return AgentResponse(
+            success=False,
+            message="Failed to create session",
+            error=str(e)
+        )
+
+@router.get("/chat/session/{session_id}")
+async def get_session(session_id: str):
+    try:
+        session = redis_service.get_session(session_id)
+        if not session:
+            return AgentResponse(
+                success=False,
+                message="Session not found",
+                error=None
+            )
+        return AgentResponse(
+            success=True,
+            message="Session retrieved successfully",
+            data=session,
+            error=None
+        )
+    except Exception as e:
+        logger.exception(f"Failed to get session: {e}")
+        return AgentResponse(
+            success=False,
+            message="Failed to get session",
+            error=str(e)
+        )
+
+@router.delete("/chat/session/{session_id}")
+async def delete_session(session_id: str):
+    try:
+        deleted = redis_service.delete_session(session_id)
+        if not deleted:
+            return AgentResponse(
+                success=False,
+                message="Session not found",
+                error=None
+            )
+        return AgentResponse(
+            success=True,
+            message="Session deleted successfully",
+            data={"session_id": session_id},
+            error=None
+        )
+    except Exception as e:
+        logger.exception(f"Failed to delete session: {e}")
+        return AgentResponse(
+            success=False,
+            message="Failed to delete session",
+            error=str(e)
+        )
+
+@router.get("/chat/sessions")
+async def list_sessions(limit: int = 20, offset: int = 0):
+    try:
+        sessions = redis_service.list_sessions(limit=limit, offset=offset)
+        return AgentResponse(
+            success=True,
+            message="Sessions retrieved successfully",
+            data={"sessions": sessions, "count": len(sessions)},
+            error=None
+        )
+    except Exception as e:
+        logger.exception(f"Failed to list sessions: {e}")
+        return AgentResponse(
+            success=False,
+            message="Failed to list sessions",
+            error=str(e)
+        )
+
+@router.get("/chat/session/{session_id}/messages")
+async def get_messages(session_id: str, limit: int = 100):
+    try:
+        messages = redis_service.get_messages(session_id, limit)
+        return AgentResponse(
+            success=True,
+            message="Messages retrieved successfully",
+            data={"messages": messages, "count": len(messages)},
+            error=None
+        )
+    except Exception as e:
+        logger.exception(f"Failed to get messages: {e}")
+        return AgentResponse(
+            success=False,
+            message="Failed to get messages",
+            error=str(e)
+        )

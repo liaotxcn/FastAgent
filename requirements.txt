@@ -13,3 +13,4 @@ loguru
 modelscope==1.16.1
 langchainhub
 openai==1.109.1
+redis==5.0.1

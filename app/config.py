@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     mcp_tool_description: str
     mcp_request_timeout: float
     
+    # Redis 配置
+    redis_url: str 
+    redis_session_ttl: int 
+    redis_message_ttl: int 
+    
     class Config:
         env_file = ".env"
         case_sensitive = False
