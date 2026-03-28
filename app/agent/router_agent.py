@@ -6,6 +6,7 @@ from app.agent.registry import get_agent_descriptions
 from app.agent.db_agent import DatabaseAgent
 from app.agent.mcp_agent import MCPAgent
 from app.agent.general_agent import GeneralAgent
+from app.services.redis_service import redis_service
 from loguru import logger
 import json
 
@@ -44,17 +45,28 @@ class RouterAgent:
         )
         
         formatted_prompt = prompt.format(agent_descriptions=get_agent_descriptions())
-        response = await self.llm.ainvoke(f"{formatted_prompt}\n\n问题：{user_question}")
+        logger.info(f"Routing user question: {user_question[:50]}...")
         
         try:
-            result = json.loads(response.content.strip())
-            result.setdefault("agent_type", "general")
-            result.setdefault("task", user_question)
-            return result
-        except json.JSONDecodeError:
-            return {"agent_type": "general", "reason": "解析失败", "task": user_question}
+            response = await self.llm.ainvoke(f"{formatted_prompt}\n\n问题：{user_question}")
+            response_text = response.content.strip()
+            logger.info(f"Router response: {response_text}")
+            
+            try:
+                result = json.loads(response_text)
+                result.setdefault("agent_type", "general")
+                result.setdefault("task", user_question)
+                logger.info(f"Route result: {result}")
+                return result
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse router response: {e}")
+                return {"agent_type": "general", "reason": "解析失败", "task": user_question}
+        except Exception as e:
+            logger.exception(f"Routing failed: {e}")
+            return {"agent_type": "general", "reason": "路由失败", "task": user_question}
     
-    async def execute(self, user_question: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    async def execute(self, user_question: str, context: Optional[Dict[str, Any]] = None, 
+                      session_id: Optional[str] = None) -> Dict[str, Any]:
         try:
             route_result = await self._route(user_question)
             logger.info(f"Routed to {route_result['agent_type']}")
@@ -65,7 +77,41 @@ class RouterAgent:
             result["data"]["agent_type"] = route_result["agent_type"]
             result["data"]["route_reason"] = route_result.get("reason", "")
             
+            if session_id:
+                redis_service.add_message(
+                    session_id=session_id,
+                    role="user",
+                    content=user_question
+                )
+                redis_service.add_message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=result["data"].get("output", ""),
+                    agent_type=route_result["agent_type"],
+                    metadata={"route_reason": route_result.get("reason", "")}
+                )
+            
             return result
         except Exception as e:
             logger.exception(f"Router failed: {str(e)}")
-            return await self._get_agent("general").execute(user_question, context)
+            # 即使出现异常，也要存储消息
+            if session_id:
+                redis_service.add_message(
+                    session_id=session_id,
+                    role="user",
+                    content=user_question
+                )
+            # 使用GeneralAgent作为 fallback
+            result = await self._get_agent("general").execute(user_question, context)
+            result["data"]["agent_type"] = "general"
+            result["data"]["route_reason"] = "路由失败，使用通用Agent"
+            # 存储fallback的响应
+            if session_id:
+                redis_service.add_message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=result["data"].get("output", ""),
+                    agent_type="general",
+                    metadata={"route_reason": "路由失败，使用通用Agent"}
+                )
+            return result
