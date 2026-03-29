@@ -6,6 +6,7 @@ from app.agent.registry import get_agent_descriptions
 from app.agent.db_agent import DatabaseAgent
 from app.agent.mcp_agent import MCPAgent
 from app.agent.general_agent import GeneralAgent
+from app.agent.vision_agent import VisionAgent
 from app.services.redis_service import redis_service
 from loguru import logger
 import json
@@ -26,6 +27,8 @@ class RouterAgent:
                 self._agent_cache[agent_type] = DatabaseAgent()
             elif agent_type == "mcp":
                 self._agent_cache[agent_type] = MCPAgent()
+            elif agent_type == "vision":
+                self._agent_cache[agent_type] = VisionAgent()
             else:
                 self._agent_cache[agent_type] = GeneralAgent()
         return self._agent_cache[agent_type]
@@ -66,13 +69,21 @@ class RouterAgent:
             return {"agent_type": "general", "reason": "路由失败", "task": user_question}
     
     async def execute(self, user_question: str, context: Optional[Dict[str, Any]] = None, 
-                      session_id: Optional[str] = None) -> Dict[str, Any]:
+                      session_id: Optional[str] = None, image: Optional[str] = None) -> Dict[str, Any]:
         try:
-            route_result = await self._route(user_question)
-            logger.info(f"Routed to {route_result['agent_type']}")
+            if image:
+                route_result = {"agent_type": "vision", "reason": "检测到图像输入", "task": user_question}
+                logger.info(f"Image detected, routing to VisionAgent")
+            else:
+                route_result = await self._route(user_question)
+                logger.info(f"Routed to {route_result['agent_type']}")
             
             agent = self._get_agent(route_result["agent_type"])
-            result = await agent.execute(route_result["task"], context)
+            
+            if route_result["agent_type"] == "vision":
+                result = await agent.execute(route_result["task"], context, image)
+            else:
+                result = await agent.execute(route_result["task"], context)
             
             result["data"]["agent_type"] = route_result["agent_type"]
             result["data"]["route_reason"] = route_result.get("reason", "")
@@ -81,7 +92,8 @@ class RouterAgent:
                 redis_service.add_message(
                     session_id=session_id,
                     role="user",
-                    content=user_question
+                    content=user_question,
+                    metadata={"has_image": bool(image)}
                 )
                 redis_service.add_message(
                     session_id=session_id,
@@ -94,18 +106,16 @@ class RouterAgent:
             return result
         except Exception as e:
             logger.exception(f"Router failed: {str(e)}")
-            # 即使出现异常，也要存储消息
             if session_id:
                 redis_service.add_message(
                     session_id=session_id,
                     role="user",
-                    content=user_question
+                    content=user_question,
+                    metadata={"has_image": bool(image)}
                 )
-            # 使用GeneralAgent作为 fallback
             result = await self._get_agent("general").execute(user_question, context)
             result["data"]["agent_type"] = "general"
             result["data"]["route_reason"] = "路由失败，使用通用Agent"
-            # 存储fallback的响应
             if session_id:
                 redis_service.add_message(
                     session_id=session_id,

@@ -108,3 +108,8 @@ class ChatRequest(BaseModel):
         max_length=100
     )
     context: Optional[Dict[str, Any]] = None
+    image: Optional[str] = Field(
+        None,
+        description="Base64 encoded image data (with data:image prefix)",
+        max_length=10000000
+    )

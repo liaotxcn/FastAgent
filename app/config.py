@@ -6,6 +6,7 @@ class Settings(BaseSettings):
     modelscope_api_key: str
     modelscope_api_base: str
     modelscope_model_id: str
+    modelscope_vision_model_id: str 
     
     # 数据库配置
     database_url: str
