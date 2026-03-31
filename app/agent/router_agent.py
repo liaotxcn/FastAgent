@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, List
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from app.config import settings
@@ -13,6 +13,7 @@ import json
 import re
 
 def is_valid_image(image: Optional[str]) -> bool:
+    """验证是否为有效图片"""
     if not image or not isinstance(image, str):
         return False
     
@@ -35,6 +36,29 @@ def is_valid_image(image: Optional[str]) -> bool:
         return False
     
     return False
+
+def has_valid_images(images: Optional[List[str]]) -> bool:
+    """检查是否有有效图片"""
+    if not images or not isinstance(images, list):
+        return False
+    
+    for image in images:
+        if is_valid_image(image):
+            return True
+    
+    return False
+
+def get_valid_images(images: Optional[List[str]]) -> List[str]:
+    """获取所有有效图片"""
+    if not images or not isinstance(images, list):
+        return []
+    
+    valid_images = []
+    for image in images:
+        if is_valid_image(image):
+            valid_images.append(image)
+    
+    return valid_images
 
 class RouterAgent:
     def __init__(self):
@@ -94,21 +118,22 @@ class RouterAgent:
             return {"agent_type": "general", "reason": "路由失败", "task": user_question}
     
     async def execute(self, user_question: str, context: Optional[Dict[str, Any]] = None, 
-                      session_id: Optional[str] = None, image: Optional[str] = None) -> Dict[str, Any]:
+                      session_id: Optional[str] = None, images: Optional[List[str]] = None) -> Dict[str, Any]:
         try:
             # 验证图像是否有效
-            if image and is_valid_image(image):
-                route_result = {"agent_type": "vision", "reason": "检测到图像输入", "task": user_question}
-                logger.info(f"Image detected, routing to VisionAgent")
+            valid_images = get_valid_images(images)
+            if valid_images:
+                route_result = {"agent_type": "vision", "reason": f"检测到{len(valid_images)}张图像输入", "task": user_question}
+                logger.info(f"{len(valid_images)} images detected, routing to VisionAgent")
             else:
-                # 无有效图像时，使用通用Agent
+                # 当没有有效图像时，使用通用Agent
                 route_result = await self._route(user_question)
                 logger.info(f"Routed to {route_result['agent_type']}")
             
             agent = self._get_agent(route_result["agent_type"])
             
             if route_result["agent_type"] == "vision":
-                result = await agent.execute(route_result["task"], context, image)
+                result = await agent.execute(route_result["task"], context, valid_images)
             else:
                 result = await agent.execute(route_result["task"], context)
             
@@ -120,7 +145,7 @@ class RouterAgent:
                     session_id=session_id,
                     role="user",
                     content=user_question,
-                    metadata={"has_image": bool(image)}
+                    metadata={"has_image": bool(valid_images), "image_count": len(valid_images) if valid_images else 0}
                 )
                 redis_service.add_message(
                     session_id=session_id,
@@ -138,7 +163,7 @@ class RouterAgent:
                     session_id=session_id,
                     role="user",
                     content=user_question,
-                    metadata={"has_image": bool(image)}
+                    metadata={"has_image": bool(valid_images), "image_count": len(valid_images) if valid_images else 0}
                 )
             result = await self._get_agent("general").execute(user_question, context)
             result["data"]["agent_type"] = "general"

@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, List
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
 from app.config import settings
@@ -13,11 +13,11 @@ class VisionAgent:
             openai_api_base=settings.modelscope_api_base
         )
     
-    async def execute(self, task: str, context: Optional[Dict[str, Any]] = None, image: Optional[str] = None) -> Dict[str, Any]:
+    async def execute(self, task: str, context: Optional[Dict[str, Any]] = None, images: Optional[List[str]] = None) -> Dict[str, Any]:
         try:
             logger.info(f"VisionAgent processing task: {task[:50]}...")
             
-            if not image:
+            if not images or not isinstance(images, list) or len(images) == 0:
                 return {
                     "success": False,
                     "message": "No image provided",
@@ -25,12 +25,12 @@ class VisionAgent:
                     "error": "Image data is required for vision analysis"
                 }
             
-            message = HumanMessage(
-                content=[
-                    {"type": "text", "text": task},
-                    {"type": "image_url", "image_url": {"url": image}}
-                ]
-            )
+            # 构建消息内容，包含文本和多个图片
+            content = [{"type": "text", "text": task}]
+            for image in images:
+                content.append({"type": "image_url", "image_url": {"url": image}})
+            
+            message = HumanMessage(content=content)
             
             response = await self.llm.ainvoke([message])
             
