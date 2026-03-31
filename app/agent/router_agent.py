@@ -10,6 +10,31 @@ from app.agent.vision_agent import VisionAgent
 from app.services.redis_service import redis_service
 from loguru import logger
 import json
+import re
+
+def is_valid_image(image: Optional[str]) -> bool:
+    if not image or not isinstance(image, str):
+        return False
+    
+    image = image.strip()
+    if not image:
+        return False
+    
+    # 检查是否为 Base64 编码图片
+    if image.startswith('data:image/'):
+        return True
+    
+    # 检查是否为有效的图片 URL
+    url_pattern = r'^https?://.*\.(jpg|jpeg|png|gif|webp|bmp|svg)'
+    if re.match(url_pattern, image, re.IGNORECASE):
+        return True
+    
+    # 检查是否是占位符字符串
+    placeholder_patterns = ['string', 'null', 'undefined', 'none', '']
+    if image.lower() in placeholder_patterns:
+        return False
+    
+    return False
 
 class RouterAgent:
     def __init__(self):
@@ -71,10 +96,12 @@ class RouterAgent:
     async def execute(self, user_question: str, context: Optional[Dict[str, Any]] = None, 
                       session_id: Optional[str] = None, image: Optional[str] = None) -> Dict[str, Any]:
         try:
-            if image:
+            # 验证图像是否有效
+            if image and is_valid_image(image):
                 route_result = {"agent_type": "vision", "reason": "检测到图像输入", "task": user_question}
                 logger.info(f"Image detected, routing to VisionAgent")
             else:
+                # 无有效图像时，使用通用Agent
                 route_result = await self._route(user_question)
                 logger.info(f"Routed to {route_result['agent_type']}")
             
