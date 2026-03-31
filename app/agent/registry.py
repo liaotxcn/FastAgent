@@ -11,6 +11,11 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "处理MCP工具调用、外部服务集成相关的问题",
         "keywords": ["工具", "调用", "mcp", "外部服务", "api"]
     },
+    "vision": {
+        "class": "VisionAgent",
+        "description": "处理图像分析、图片理解、视觉识别相关的问题",
+        "keywords": ["图片", "图像", "照片", "看", "识别", "分析", "描述"]
+    },
     "general": {
         "class": "GeneralAgent",
         "description": "处理一般性对话、问答、闲聊等不需要特定工具的问题",

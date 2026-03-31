@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List, List
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from app.config import settings
@@ -6,9 +6,59 @@ from app.agent.registry import get_agent_descriptions
 from app.agent.db_agent import DatabaseAgent
 from app.agent.mcp_agent import MCPAgent
 from app.agent.general_agent import GeneralAgent
+from app.agent.vision_agent import VisionAgent
 from app.services.redis_service import redis_service
 from loguru import logger
 import json
+import re
+
+def is_valid_image(image: Optional[str]) -> bool:
+    """验证是否为有效图片"""
+    if not image or not isinstance(image, str):
+        return False
+    
+    image = image.strip()
+    if not image:
+        return False
+    
+    # 检查是否为 Base64 编码图片
+    if image.startswith('data:image/'):
+        return True
+    
+    # 检查是否为有效的图片 URL
+    url_pattern = r'^https?://.*\.(jpg|jpeg|png|gif|webp|bmp|svg)'
+    if re.match(url_pattern, image, re.IGNORECASE):
+        return True
+    
+    # 检查是否是占位符字符串
+    placeholder_patterns = ['string', 'null', 'undefined', 'none', '']
+    if image.lower() in placeholder_patterns:
+        return False
+    
+    return False
+
+def has_valid_images(images: Optional[List[str]]) -> bool:
+    """检查是否有有效图片"""
+    if not images or not isinstance(images, list):
+        return False
+    
+    for image in images:
+        if is_valid_image(image):
+            return True
+    
+    return False
+
+def get_valid_images(images: Optional[List[str]]) -> List[str]:
+    """获取所有有效图片"""
+    if not images or not isinstance(images, list):
+        return []
+    
+    valid_images = []
+    for image in images:
+        if is_valid_image(image):
+            valid_images.append(image)
+    
+    return valid_images
 
 class RouterAgent:
     def __init__(self):
@@ -26,6 +76,8 @@ class RouterAgent:
                 self._agent_cache[agent_type] = DatabaseAgent()
             elif agent_type == "mcp":
                 self._agent_cache[agent_type] = MCPAgent()
+            elif agent_type == "vision":
+                self._agent_cache[agent_type] = VisionAgent()
             else:
                 self._agent_cache[agent_type] = GeneralAgent()
         return self._agent_cache[agent_type]
@@ -66,13 +118,24 @@ class RouterAgent:
             return {"agent_type": "general", "reason": "路由失败", "task": user_question}
     
     async def execute(self, user_question: str, context: Optional[Dict[str, Any]] = None, 
-                      session_id: Optional[str] = None) -> Dict[str, Any]:
+                      session_id: Optional[str] = None, images: Optional[List[str]] = None) -> Dict[str, Any]:
         try:
-            route_result = await self._route(user_question)
-            logger.info(f"Routed to {route_result['agent_type']}")
+            # 验证图像是否有效
+            valid_images = get_valid_images(images)
+            if valid_images:
+                route_result = {"agent_type": "vision", "reason": f"检测到{len(valid_images)}张图像输入", "task": user_question}
+                logger.info(f"{len(valid_images)} images detected, routing to VisionAgent")
+            else:
+                # 当没有有效图像时，使用通用Agent
+                route_result = await self._route(user_question)
+                logger.info(f"Routed to {route_result['agent_type']}")
             
             agent = self._get_agent(route_result["agent_type"])
-            result = await agent.execute(route_result["task"], context)
+            
+            if route_result["agent_type"] == "vision":
+                result = await agent.execute(route_result["task"], context, valid_images)
+            else:
+                result = await agent.execute(route_result["task"], context)
             
             result["data"]["agent_type"] = route_result["agent_type"]
             result["data"]["route_reason"] = route_result.get("reason", "")
@@ -81,7 +144,8 @@ class RouterAgent:
                 redis_service.add_message(
                     session_id=session_id,
                     role="user",
-                    content=user_question
+                    content=user_question,
+                    metadata={"has_image": bool(valid_images), "image_count": len(valid_images) if valid_images else 0}
                 )
                 redis_service.add_message(
                     session_id=session_id,
@@ -94,18 +158,16 @@ class RouterAgent:
             return result
         except Exception as e:
             logger.exception(f"Router failed: {str(e)}")
-            # 即使出现异常，也要存储消息
             if session_id:
                 redis_service.add_message(
                     session_id=session_id,
                     role="user",
-                    content=user_question
+                    content=user_question,
+                    metadata={"has_image": bool(valid_images), "image_count": len(valid_images) if valid_images else 0}
                 )
-            # 使用GeneralAgent作为 fallback
             result = await self._get_agent("general").execute(user_question, context)
             result["data"]["agent_type"] = "general"
             result["data"]["route_reason"] = "路由失败，使用通用Agent"
-            # 存储fallback的响应
             if session_id:
                 redis_service.add_message(
                     session_id=session_id,

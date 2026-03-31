@@ -94,7 +94,7 @@ async def smart_chat(request: ChatRequest):
             session_id = redis_service.create_session()
         
         router_agent = RouterAgent()
-        result = await router_agent.execute(request.message, request.context, session_id)
+        result = await router_agent.execute(request.message, request.context, session_id, request.images)
         
         result["data"]["session_id"] = session_id
         
