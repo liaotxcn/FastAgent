@@ -16,6 +16,11 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "description": "处理图像分析、图片理解、视觉识别相关的问题",
         "keywords": ["图片", "图像", "照片", "看", "识别", "分析", "描述"]
     },
+    "map": {
+        "class": "MapAgent",
+        "description": "处理地图查询、路线规划、地点搜索相关的问题",
+        "keywords": ["地图", "路线", "位置", "地点", "导航", "周边", "地址"]
+    },
     "general": {
         "class": "GeneralAgent",
         "description": "处理一般性对话、问答、闲聊等不需要特定工具的问题",

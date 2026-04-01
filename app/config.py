@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import Field
 from loguru import logger
 
 class Settings(BaseSettings):
@@ -46,6 +47,10 @@ class Settings(BaseSettings):
     redis_url: str 
     redis_session_ttl: int 
     redis_message_ttl: int 
+    
+    # 地图 API 配置
+    amap_api_key: str 
+    amap_api_base: str 
     
     class Config:
         env_file = ".env"
