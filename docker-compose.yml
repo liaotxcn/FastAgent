@@ -14,8 +14,10 @@ services:
       - DATABASE_URL=${DATABASE_URL}
       - MCP_server_url=${MCP_server_url}
       - LOG_level=${LOG_level}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
     depends_on:
       - db
+      - redis
     restart: unless-stopped
 
   db:
@@ -31,5 +33,14 @@ services:
       - mysql_data:/var/lib/mysql
     restart: unless-stopped
 
+  redis:
+    image: redis:7.0
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
 volumes:
   mysql_data:
+  redis_data:
