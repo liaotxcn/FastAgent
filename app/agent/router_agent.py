@@ -84,9 +84,14 @@ class RouterAgent:
     
     async def _route(self, user_question: str) -> Dict[str, Any]:
         prompt = PromptTemplate(
-            template="""分析用户问题，选择合适的Agent处理。
+            template="""你是 FastAgent 的智能路由器，负责分析用户问题并选择最合适的 Agent 处理。
 
-可用Agent：
+=== 分析要求 ===
+1. 仔细理解用户的问题意图
+2. 识别问题的核心关键词
+3. 匹配最适合的 Agent 类型
+
+=== 可用Agent ===
 {agent_descriptions}
 
 返回JSON格式：
@@ -105,12 +110,22 @@ class RouterAgent:
             logger.info(f"Router response: {response_text}")
             
             try:
-                result = json.loads(response_text)
-                result.setdefault("agent_type", "general")
-                result.setdefault("task", user_question)
-                logger.info(f"Route result: {result}")
-                return result
-            except json.JSONDecodeError as e:
+                # 提取JSON内容
+                json_match = re.search(r'\{[\s\S]*\}', response_text)
+                if json_match:
+                    result = json.loads(json_match.group())
+                else:
+                    raise json.JSONDecodeError("No JSON found", response_text, 0)
+                
+                # 清理带引号的键名
+                result = {k.strip('"'): v for k, v in result.items()}
+                
+                return {
+                    "agent_type": result.get("agent_type", "general"),
+                    "reason": result.get("reason", ""),
+                    "task": result.get("task", user_question)
+                }
+            except Exception as e:
                 logger.error(f"Failed to parse router response: {e}")
                 return {"agent_type": "general", "reason": "解析失败", "task": user_question}
         except Exception as e:
