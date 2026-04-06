@@ -1,14 +1,36 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
-from langchain.agents import AgentExecutor, create_react_agent
+from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 from app.config import settings
 from app.database.connection import AsyncSessionLocal
 from app.database.models import AgentCallHistory
 from loguru import logger
 import re
 import json
+from langchain_core.messages import BaseMessage
+
+
+def serialize_message(message):
+    """将LangChain消息对象转换为可序列化的字典"""
+    if isinstance(message, BaseMessage):
+        return {
+            "role": message.type,
+            "content": message.content
+        }
+    return message
+
+
+def serialize_result(result):
+    """递归处理结果中的消息对象"""
+    if isinstance(result, dict):
+        return {k: serialize_result(v) for k, v in result.items()}
+    elif isinstance(result, list):
+        return [serialize_result(item) for item in result]
+    elif isinstance(result, BaseMessage):
+        return serialize_message(result)
+    return result
 
 class BaseAgent(ABC):
     def __init__(self, model_name: str = None, temperature: float = None):
@@ -21,58 +43,30 @@ class BaseAgent(ABC):
             openai_api_base=settings.modelscope_api_base
         )
         self.tools = self._get_tools()
-        self.agent_executor = self._create_agent()
+        self.agent = self._create_agent()
     
     @abstractmethod
     def _get_tools(self) -> list:
         pass
     
-    def _create_agent(self) -> AgentExecutor:
-        # REACT 提示模板
-        template = """你是 FastAgent，一个智能助手。请根据用户问题和可用工具，提供准确、友好的回答。
-
-=== 可用工具 ===
-{tools}
-
-=== 操作格式 ===
-请严格按照以下格式进行思考和操作：
-
-Question: 用户的问题
-Thought: 我需要分析问题，决定是否使用工具
-Action: 工具名称（必须是 [{tool_names}] 中的一个）
-Action Input: 工具的输入参数
-Observation: 工具返回的结果
-...（可以重复多次 Thought/Action/Action Input/Observation）
-Thought: 我现在有足够的信息来回答用户的问题
-Final Answer: 对原始问题的最终回答
+    def _create_agent(self):
+        system_prompt = """你是 FastAgent，一个智能助手。请根据用户问题和可用工具，提供准确、友好的回答。
 
 === 回答要求 ===
 1. 语言：使用与用户相同的语言
 2. 风格：友好、专业、简洁明了
 3. 内容：基于工具执行结果，提供准确的信息
-4. 格式：只返回 Final Answer，不要包含其他格式说明
-
-开始！
-
-Question: {input}
-Thought: {agent_scratchpad}
+4. 格式：直接回答用户的问题，不需要任何格式说明
 """
         
-        prompt = PromptTemplate(
-            template=template,
-            input_variables=["tools", "tool_names", "input", "agent_scratchpad"]
+        # 创建agent
+        agent = create_agent(
+            model=self.llm,
+            tools=self.tools,
+            system_prompt=system_prompt
         )
         
-        agent = create_react_agent(self.llm, self.tools, prompt)
-        return AgentExecutor(
-            agent=agent, 
-            tools=self.tools, 
-            verbose=True,
-            return_only_outputs=False,
-            max_iterations=settings.agent_max_iterations,
-            early_stopping_method="force",
-            handle_parsing_errors=True
-        )
+        return agent
     
     @abstractmethod
     def _get_system_prompt(self) -> str:
@@ -100,10 +94,11 @@ Thought: {agent_scratchpad}
                 await session.refresh(history)
                 history_id = history.id
             
-            result = await self.agent_executor.ainvoke({
-                "input": task,
-                "tools": tools_description,
-                "tool_names": tool_names
+            result = await self.agent.ainvoke({
+                "messages": [{
+                    "role": "user",
+                    "content": task
+                }]
             })
             
             # 记录调用成功
@@ -159,15 +154,29 @@ Thought: {agent_scratchpad}
                     history.tool_name = tool_name or "unknown"
                     history.tool_input = tool_input or "{}"
                     history.tool_output = tool_output or ""
-                    history.result = json.dumps(result)
+                    # 序列化结果以处理消息对象
+                    serialized_result = serialize_result(result)
+                    history.result = json.dumps(serialized_result)
                     await session.commit()
             
-            # 确保 data 对象包含 input 和 output 属性
-            data = result or {}
+            # 序列化结果以处理消息对象
+            data = serialize_result(result) or {}
             if "input" not in data:
                 data["input"] = task
+            
+            # 从返回格式中提取output
             if "output" not in data:
-                data["output"] = data.get("result", "")
+                # 检查是否有message格式的输出
+                if isinstance(data, dict) and "messages" in data:
+                    messages = data["messages"]
+                    if messages and isinstance(messages, list):
+                        for msg in reversed(messages):
+                            if isinstance(msg, dict) and msg.get("role") == "assistant":
+                                data["output"] = msg.get("content", "")
+                                break
+                
+                if "output" not in data:
+                    data["output"] = data.get("result", "")
             
             return {
                 "success": True,
@@ -199,7 +208,9 @@ Thought: {agent_scratchpad}
                             history = await session.get(AgentCallHistory, history_id)
                             if history:
                                 history.success = 1
-                                history.result = json.dumps({"input": task, "output": query_result})
+                                # 序列化结果以处理消息对象
+                                serialized_result = serialize_result({"input": task, "output": query_result})
+                                history.result = json.dumps(serialized_result)
                                 history.error_message = None
                                 history.tool_name = "database_query"
                                 # 尝试从任务中提取查询语句

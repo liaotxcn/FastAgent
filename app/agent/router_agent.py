@@ -1,6 +1,6 @@
 from typing import Dict, Any, Optional, List, List
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 from app.config import settings
 from app.agent.registry import get_agent_descriptions
 from app.agent.db_agent import DatabaseAgent

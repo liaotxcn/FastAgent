@@ -43,10 +43,18 @@ class VisionAgent:
                     "error": "Model returned no response"
                 }
             
-            output = response.content if hasattr(response, 'content') else str(response)
+            # 从响应中提取内容
+            output = None
+            if hasattr(response, 'content'):
+                output = response.content
+            elif hasattr(response, 'choices') and response.choices:
+                for choice in response.choices:
+                    if hasattr(choice, 'message') and hasattr(choice.message, 'content'):
+                        output = choice.message.content
+                        break
             
             if not output:
-                logger.error("Empty output from LLM")
+                logger.error(f"Empty output from LLM, response: {response}")
                 return {
                     "success": False,
                     "message": "Empty response from model",

@@ -1,6 +1,6 @@
 from langchain.tools import BaseTool
-from typing import Type, Optional
-from pydantic.v1 import BaseModel, Field, validator
+from typing import Type, Optional, Annotated
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from app.database.connection import get_db
@@ -9,19 +9,19 @@ from loguru import logger
 import re
 
 class DatabaseQueryInput(BaseModel):
-    query: str = Field(
+    query: Annotated[str, Field(
         description="SQL query to execute",
         min_length=5
-    )
+    )]
     params: Optional[dict] = Field(default=None, description="Query parameters")
-    limit: Optional[int] = Field(
-        default=None, 
+    limit: Optional[Annotated[int, Field(
         ge=1, 
-        le=1000, 
+        le=1000,
         description="Maximum number of rows to return"
-    )
+    )]] = None
     
-    @validator('query')
+    @field_validator('query')
+    @classmethod
     def validate_sql_query(cls, v):
         # 白名单机制：只允许 SELECT 查询
         if not re.match(r'^\s*SELECT\s', v, re.IGNORECASE):
@@ -48,8 +48,8 @@ class DatabaseQueryInput(BaseModel):
         return v
 
 class DatabaseQueryTool(BaseTool):
-    name = settings.db_tool_name
-    description = settings.db_tool_description
+    name: str = settings.db_tool_name
+    description: str = settings.db_tool_description
     args_schema: Type[BaseModel] = DatabaseQueryInput
     
     async def _arun(self, query: str, params: Optional[dict] = None, limit: int = None) -> str:
