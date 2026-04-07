@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, AsyncGenerator
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
@@ -50,14 +50,7 @@ class BaseAgent(ABC):
         pass
     
     def _create_agent(self):
-        system_prompt = """你是 FastAgent，一个智能助手。请根据用户问题和可用工具，提供准确、友好的回答。
-
-=== 回答要求 ===
-1. 语言：使用与用户相同的语言
-2. 风格：友好、专业、简洁明了
-3. 内容：基于工具执行结果，提供准确的信息
-4. 格式：直接回答用户的问题，不需要任何格式说明
-"""
+        system_prompt = self._get_system_prompt()
         
         # 创建agent
         agent = create_agent(
@@ -71,6 +64,72 @@ class BaseAgent(ABC):
     @abstractmethod
     def _get_system_prompt(self) -> str:
         pass
+    
+    async def stream_execute(self, task: str, context: Optional[Dict[str, Any]] = None) -> AsyncGenerator[str, None]:
+        """流式执行任务"""
+        history_id = None
+        try:
+            async with AsyncSessionLocal() as session:
+                history = AgentCallHistory(
+                    agent_type=self.__class__.__name__,
+                    task=task,
+                    context=json.dumps(context) if context else None,
+                    success=1
+                )
+                session.add(history)
+                await session.commit()
+                await session.refresh(history)
+                history_id = history.id
+            
+            full_response = ""
+            
+            # 若有工具 --> 使用 agent 流式执行
+            if self.tools:
+                async for event in self.agent.astream_events(
+                    {"messages": [{"role": "user", "content": task}]},
+                    version="v1"
+                ):
+                    if event.get("event") == "on_chat_model_stream":
+                        chunk = event.get("data", {}).get("chunk")
+                        if chunk and hasattr(chunk, "content"):
+                            content = chunk.content
+                            if content:
+                                full_response += content
+                                yield content
+            else:
+                # 若无工具 --> 使用 LLM
+                system_prompt = self._get_system_prompt()
+                messages = [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": task}
+                ]
+                
+                async for chunk in self.llm.astream(messages):
+                    if chunk.content:
+                        full_response += chunk.content
+                        yield chunk.content
+            
+            if history_id:
+                async with AsyncSessionLocal() as session:
+                    history = await session.get(AgentCallHistory, history_id)
+                    if history:
+                        serialized_result = serialize_result({"input": task, "output": full_response})
+                        history.result = json.dumps(serialized_result)
+                        await session.commit()
+            
+            logger.info(f"Agent streaming completed: {self.__class__.__name__}")
+        
+        except Exception as e:
+            error_msg = str(e)
+            logger.exception(f"Agent streaming failed: {error_msg}")
+            if history_id:
+                async with AsyncSessionLocal() as session:
+                    history = await session.get(AgentCallHistory, history_id)
+                    if history:
+                        history.success = 0
+                        history.error_message = error_msg
+                        await session.commit()
+            yield f"处理失败: {error_msg}"
     
     async def execute(self, task: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         history_id = None

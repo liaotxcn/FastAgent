@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from app.models.schemas import AgentResponse, AgentExecuteRequest, MCPToolRequest, DatabaseQueryRequest, ChatRequest
 from app.agent.mcp_agent import MCPAgent
@@ -6,6 +7,7 @@ from app.agent.db_agent import DatabaseAgent
 from app.agent.router_agent import RouterAgent
 from app.services.redis_service import redis_service
 from loguru import logger
+import json
 
 router = APIRouter(prefix="/api/v1", tags=["agents"])
 
@@ -115,6 +117,38 @@ async def smart_chat(request: ChatRequest):
             data={"input": request.message, "output": ""},
             error=str(e)
         )
+
+@router.post("/agent/chat/stream")
+async def smart_chat_stream(request: ChatRequest):
+    """流式聊天接口"""
+    async def event_generator():
+        try:
+            session_id = request.session_id
+            if not session_id:
+                session_id = redis_service.create_session()
+            
+            yield f"data: {json.dumps({'type': 'session', 'session_id': session_id}, ensure_ascii=False)}\n\n"
+            
+            router_agent = RouterAgent()
+            
+            async for data in router_agent.stream_execute(request.message, request.context, session_id, request.images):
+                yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+            
+            yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
+        
+        except Exception as e:
+            logger.exception(f"Stream chat failed: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'content': str(e)}, ensure_ascii=False)}\n\n"
+    
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 @router.get("/agent/health")
 async def health_check():
