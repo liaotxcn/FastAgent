@@ -1,5 +1,14 @@
 <template>
-  <div class="flex flex-col h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+  <div class="flex flex-col h-screen bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden">
+    <!-- 背景图片 -->
+    <div class="absolute top-0 left-0 w-1/3 h-full opacity-10 pointer-events-none">
+      <img src="/src/hello.png" alt="Background" class="absolute top-20 left-10 w-40 h-40 object-contain" />
+      <img src="/src/run.png" alt="Background" class="absolute bottom-20 left-10 w-40 h-40 object-contain" />
+    </div>
+    <div class="absolute top-0 right-0 w-1/3 h-full opacity-10 pointer-events-none">
+      <img src="/src/sleep.png" alt="Background" class="absolute top-20 right-10 w-40 h-40 object-contain" />
+      <img src="/src/logo.png" alt="Background" class="absolute bottom-20 right-10 w-40 h-40 object-contain" />
+    </div>
     <!-- 顶部导航 -->
     <header class="bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-6 py-4 sticky top-0 z-10">
       <div class="max-w-4xl mx-auto flex items-center justify-between">
@@ -148,6 +157,29 @@
               />
             </button>
 
+            <button 
+              @click="triggerFileUpload"
+              class="p-3 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0"
+              title="上传文件"
+            >
+              <i class="fa fa-file text-lg"></i>
+              <input 
+                ref="fileInput" 
+                type="file" 
+                class="hidden" 
+                @change="handleFileUpload"
+              />
+            </button>
+
+            <button 
+              @click="toggleVoiceRecording"
+              class="p-3 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0"
+              :class="{ 'text-red-500 bg-red-50': isRecording }"
+              title="语音输入"
+            >
+              <i class="fa fa-microphone text-lg"></i>
+            </button>
+
             <div class="flex-1 relative">
               <textarea 
                 v-model="userInput" 
@@ -181,7 +213,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, reactive } from 'vue'
 
 const API_BASE_URL = '/api/v1'
 const sessionId = ref(localStorage.getItem('chat_session_id'))
@@ -191,8 +223,12 @@ const userInput = ref('')
 const messages = ref([])
 const chatContainer = ref(null)
 const imageInput = ref(null)
+const fileInput = ref(null)
 const textareaRef = ref(null)
+const isRecording = ref(false)
 let abortController = null
+let mediaRecorder = null
+let audioChunks = []
 
 // 清空对话
 const clearChat = () => {
@@ -292,37 +328,65 @@ const handleImageUpload = (event) => {
   event.target.value = ''
 }
 
+const triggerFileUpload = () => {
+  if (fileInput.value) {
+    fileInput.value.click()
+  }
+}
+
+const handleFileUpload = (event) => {
+  const file = event.target.files[0]
+  if (!file) return
+
+  // 这里可以添加文件处理逻辑
+  alert(`文件 ${file.name} 已选择，大小：${(file.size / 1024).toFixed(2)}KB`)
+  event.target.value = ''
+}
+
+const toggleVoiceRecording = async () => {
+  if (isRecording.value) {
+    // 停止录音
+    if (mediaRecorder) {
+      mediaRecorder.stop()
+    }
+    isRecording.value = false
+  } else {
+    // 开始录音
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      mediaRecorder = new MediaRecorder(stream)
+      audioChunks = []
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data)
+        }
+      }
+
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' })
+        // 这里可以添加语音处理逻辑
+        alert('录音已完成')
+        // 关闭媒体流
+        stream.getTracks().forEach(track => track.stop())
+      }
+
+      mediaRecorder.start()
+      isRecording.value = true
+    } catch (error) {
+      console.error('录音失败:', error)
+      alert('无法访问麦克风，请检查权限')
+    }
+  }
+}
+
 const sendMessage = async () => {
   let message = userInput.value.trim()
   if (!message && selectedImages.value.length === 0) return
   if (isProcessing.value) return
 
-  // 数据库查询预处理：确保是SELECT语句
-  if (message.toLowerCase().includes('查询') && (message.toLowerCase().includes('表') || message.toLowerCase().includes('from'))) {
-    if (!message.toLowerCase().startsWith('select')) {
-      // 简单直接的处理：统一转换为SELECT * FROM table
-      // 提取表名
-      let tableName = ''
-      const tableMatch = message.match(/(表|from)\s*([\w_]+)/i)
-      if (tableMatch) {
-        tableName = tableMatch[2]
-      } else {
-        // 尝试从查询内容中提取表名
-        const contentMatch = message.match(/查询.*?(\w+)/i)
-        if (contentMatch) {
-          tableName = contentMatch[1]
-        }
-      }
-      
-      if (tableName) {
-        message = `SELECT * FROM ${tableName}`
-      }
-    }
-  }
-
   isProcessing.value = true
 
-  // 添加用户消息
   messages.value.push({
     role: 'user',
     content: message || '分析图片',
@@ -331,10 +395,15 @@ const sendMessage = async () => {
   
   userInput.value = ''
 
+  const assistantMessage = reactive({
+    role: 'assistant',
+    content: '',
+    agentType: 'general'
+  })
+  messages.value.push(assistantMessage)
+
   try {
     abortController = new AbortController()
-    // 设置3分钟超时
-    const timeoutId = setTimeout(() => abortController.abort(), 180000)
 
     const payload = {
       message: message || '分析图片',
@@ -342,55 +411,91 @@ const sendMessage = async () => {
       images: selectedImages.value
     }
 
-    const response = await fetch(`${API_BASE_URL}/agent/chat`, {
+    console.log('Sending SSE request:', payload)
+
+    const response = await fetch(`${API_BASE_URL}/agent/chat/stream`, {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Accept': 'text/event-stream'
       },
       body: JSON.stringify(payload),
       signal: abortController.signal
     })
 
-    clearTimeout(timeoutId)
+    console.log('SSE Response:', response)
+    console.log('Status:', response.status)
+    console.log('Headers:', Object.fromEntries(response.headers.entries()))
 
-    const result = await response.json()
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+    }
 
-    if (result.success && result.data) {
-      if (result.data.session_id) {
-        sessionId.value = result.data.session_id
-        localStorage.setItem('chat_session_id', sessionId.value)
-      }
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      console.log('Received chunk:', value)
       
-      const output = result.data.output || '抱歉，没有收到响应。'
-      const agentType = result.data.agent_type || 'general'
-      messages.value.push({
-        role: 'assistant',
-        content: output,
-        agentType: agentType
-      })
-    } else {
-      messages.value.push({
-        role: 'assistant',
-        content: `错误: ${result.message || result.error || '请求失败'}`
-      })
+      buffer += decoder.decode(value, { stream: true })
+      console.log('Buffer:', buffer)
+      
+      const lines = buffer.split('\n')
+      console.log('Lines:', lines)
+      
+      buffer = lines.pop() || ''
+
+      for (const line of lines) {
+        const trimmedLine = line.trim()
+        console.log('Processing line:', trimmedLine)
+        
+        if (trimmedLine.startsWith('data: ')) {
+          try {
+            const jsonStr = trimmedLine.slice(6)
+            if (!jsonStr) continue
+            
+            console.log('JSON string:', jsonStr)
+            const data = JSON.parse(jsonStr)
+            console.log('Parsed data:', data)
+            
+            if (data.type === 'session') {
+              sessionId.value = data.session_id
+              localStorage.setItem('chat_session_id', sessionId.value)
+              console.log('Session ID:', data.session_id)
+            } else if (data.type === 'metadata') {
+              assistantMessage.agentType = data.agent_type
+              console.log('Agent type:', data.agent_type)
+            } else if (data.type === 'content') {
+              assistantMessage.content += data.content
+              console.log('Content chunk:', data.content)
+              console.log('Full content:', assistantMessage.content)
+            } else if (data.type === 'error') {
+              assistantMessage.content = `错误: ${data.content}`
+              console.log('Error:', data.content)
+            } else if (data.type === 'done') {
+              console.log('Stream done')
+              break
+            }
+          } catch (e) {
+            console.error('Failed to parse SSE data:', e, trimmedLine)
+          }
+        }
+      }
     }
   } catch (error) {
+    console.error('Stream error:', error)
     if (error.name === 'AbortError') {
-      messages.value.push({
-        role: 'assistant',
-        content: '请求超时，请稍后重试'
-      })
+      assistantMessage.content = '请求超时，请稍后重试'
     } else {
-      messages.value.push({
-        role: 'assistant',
-        content: `网络错误: ${error.message}`
-      })
+      assistantMessage.content = `网络错误: ${error.message}`
     }
   } finally {
     abortController = null
     isProcessing.value = false
-    
-    // 清空图片选择
     selectedImages.value = []
   }
 }
