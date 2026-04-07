@@ -1,6 +1,6 @@
-from typing import Dict, Any, Optional, List, List
+from typing import Dict, Any, Optional, List, List, AsyncGenerator
 from langchain_openai import ChatOpenAI
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
 from app.config import settings
 from app.agent.registry import get_agent_descriptions
 from app.agent.db_agent import DatabaseAgent
@@ -195,3 +195,56 @@ class RouterAgent:
                     metadata={"route_reason": "路由失败，使用通用Agent"}
                 )
             return result
+    
+    async def stream_execute(self, user_question: str, context: Optional[Dict[str, Any]] = None,
+                            session_id: Optional[str] = None, images: Optional[List[str]] = None) -> AsyncGenerator[Dict[str, Any], None]:
+        """流式执行路由和任务"""
+        try:
+            valid_images = get_valid_images(images)
+            
+            if valid_images:
+                route_result = {"agent_type": "vision", "reason": f"检测到{len(valid_images)}张图像输入", "task": user_question}
+                logger.info(f"{len(valid_images)} images detected, routing to VisionAgent")
+            else:
+                yield {"type": "status", "content": "正在分析问题..."}
+                route_result = await self._route(user_question)
+                logger.info(f"Routed to {route_result['agent_type']}")
+            
+            agent = self._get_agent(route_result["agent_type"])
+            
+            yield {
+                "type": "metadata",
+                "agent_type": route_result["agent_type"],
+                "route_reason": route_result.get("reason", "")
+            }
+            
+            full_response = ""
+            
+            if route_result["agent_type"] == "vision":
+                async for chunk in agent.stream_execute(route_result["task"], context, valid_images):
+                    full_response += chunk
+                    yield {"type": "content", "content": chunk}
+            else:
+                async for chunk in agent.stream_execute(route_result["task"], context):
+                    full_response += chunk
+                    yield {"type": "content", "content": chunk}
+            
+            if session_id:
+                redis_service.add_message(
+                    session_id=session_id,
+                    role="user",
+                    content=user_question,
+                    metadata={"has_image": bool(valid_images), "image_count": len(valid_images) if valid_images else 0}
+                )
+                redis_service.add_message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=full_response,
+                    agent_type=route_result["agent_type"],
+                    metadata={"route_reason": route_result.get("reason", "")}
+                )
+        
+        except Exception as e:
+            error_msg = str(e)
+            logger.exception(f"Router streaming failed: {error_msg}")
+            yield {"type": "error", "content": f"处理失败: {error_msg}"}

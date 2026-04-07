@@ -1,6 +1,6 @@
 from langchain.tools import BaseTool
 from typing import Type, Optional
-from pydantic.v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 import httpx
 from loguru import logger
 from app.config import settings
@@ -10,8 +10,8 @@ class MCPToolInput(BaseModel):
     parameters: dict = Field(description="Parameters for the MCP tool")
 
 class MCPToolWrapper(BaseTool):
-    name = settings.mcp_tool_name
-    description = settings.mcp_tool_description
+    name: str = settings.mcp_tool_name
+    description: str = settings.mcp_tool_description
     args_schema: Type[BaseModel] = MCPToolInput
     
     async def _arun(self, tool_name: str, parameters: dict) -> str:

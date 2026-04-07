@@ -1,6 +1,6 @@
 from langchain.tools import BaseTool
 from typing import Type
-from pydantic.v1 import BaseModel, Field
+from pydantic import BaseModel, Field
 import httpx
 from app.config import settings
 from loguru import logger
@@ -9,8 +9,8 @@ class MapSearchInput(BaseModel):
     location: str = Field(description="地点名称")
 
 class MapSearchTool(BaseTool):
-    name = "map_search"
-    description = "搜索地点信息，参数为地点名称"
+    name: str = "map_search"
+    description: str = "搜索地点信息，参数为地点名称"
     args_schema: Type[BaseModel] = MapSearchInput
     
     async def _arun(self, location: str) -> str:
@@ -46,8 +46,8 @@ class RoutePlanningInput(BaseModel):
     destination: str = Field(description="终点")
 
 class RoutePlanningTool(BaseTool):
-    name = "route_planning"
-    description = "规划路线，需要两个参数：origin（起点）和destination（终点），参数格式为JSON对象"
+    name: str = "route_planning"
+    description: str = "规划路线，需要两个参数：origin（起点）和destination（终点），参数格式为JSON对象"
     args_schema: Type[BaseModel] = RoutePlanningInput
     
     async def _arun(self, origin: str, destination: str) -> str:
