@@ -113,3 +113,78 @@ class ChatRequest(BaseModel):
         description="List of base64 encoded image data (with data:image prefix), maximum 5 images",
         max_items=5
     )
+
+class RegisterRequest(BaseModel):
+    """用户注册请求"""
+    username: str = Field(
+        ..., 
+        description="用户名",
+        min_length=3,
+        max_length=50,
+        pattern=r'^[a-zA-Z0-9_-]+$'
+
+    )
+    password: str = Field(
+        ..., 
+        description="密码",
+        min_length=6,
+        max_length=50
+    )
+    confirm_password: str = Field(
+        ..., 
+        description="确认密码",
+        min_length=6,
+        max_length=50
+    )
+    email: str = Field(
+        ..., 
+        description="邮箱",
+        pattern=r'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$'
+    )
+    
+    @validator('confirm_password')
+    def validate_password_match(cls, v, values):
+        if 'password' in values and v != values['password']:
+            raise ValueError("密码和确认密码不一致")
+        return v
+
+class LoginRequest(BaseModel):
+    """用户登录请求"""
+    username: str = Field(
+        ..., 
+        description="用户名",
+        min_length=3,
+        max_length=50
+    )
+    password: str = Field(
+        ..., 
+        description="密码",
+        min_length=6,
+        max_length=50
+    )
+    email_code: str = Field(
+        ..., 
+        description="邮箱验证码",
+        min_length=6,
+        max_length=6,
+        pattern=r'^\d{6}$'
+
+       )
+
+class UserResponse(BaseModel):
+    """用户响应"""
+    id: int
+    username: str
+    email: str
+    is_active: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+class AuthResponse(BaseModel):
+    """认证响应"""
+    success: bool
+    message: str
+    data: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None

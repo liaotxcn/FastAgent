@@ -1,6 +1,6 @@
 import asyncio
 from app.database.connection import engine, Base
-from app.database.models import AgentCallHistory
+from app.database.models import AgentCallHistory, User, EmailVerification
 
 async def init_db():
     """初始化数据库表结构"""

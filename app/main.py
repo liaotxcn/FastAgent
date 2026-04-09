@@ -4,7 +4,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 import time
 import redis
 from app.config import settings
-from app.api.routes import router
+from app.api.routes import router, auth_router
 from app.config import settings
 from loguru import logger
 
@@ -59,6 +59,7 @@ async def rate_limit_middleware(request: Request, call_next):
     return response
 
 app.include_router(router)
+app.include_router(auth_router)
 
 @app.on_event("startup")
 async def startup_event():
