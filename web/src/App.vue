@@ -21,15 +21,55 @@
             <p class="text-xs text-gray-500">智能助手</p>
           </div>
         </div>
-        <button 
-          @click="clearChat" 
-          class="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50"
-          title="清空对话"
-        >
-          <i class="fa fa-trash-o"></i>
-        </button>
+        <div class="flex items-center gap-3">
+          <!-- 登录状态 -->
+          <div v-if="isLoggedIn" class="flex items-center gap-2">
+            <div class="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
+              {{ user.username.charAt(0).toUpperCase() }}
+            </div>
+            <span class="text-sm font-medium text-gray-700">{{ user.username }}</span>
+            <button 
+              @click="logout" 
+              class="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50"
+              title="退出登录"
+            >
+              <i class="fa fa-sign-out"></i>
+            </button>
+          </div>
+          <!-- 未登录状态 -->
+          <div v-else class="flex items-center gap-2">
+            <button 
+              @click="openAuthDialog(true)" 
+              class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              登录
+            </button>
+            <button 
+              @click="openAuthDialog(false)" 
+              class="px-3 py-1.5 text-sm bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-colors"
+            >
+              注册
+            </button>
+          </div>
+          <button 
+            @click="clearChat" 
+            class="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50"
+            title="清空对话"
+          >
+            <i class="fa fa-trash-o"></i>
+          </button>
+        </div>
       </div>
     </header>
+    
+    <!-- 登录/注册对话框 -->
+    <AuthDialog 
+      :is-visible="authDialogVisible" 
+      :is-login="authDialogIsLogin"
+      @close="closeAuthDialog"
+      @login-success="handleLoginSuccess"
+    />
+
 
     <!-- 主内容区 -->
     <main class="flex-1 overflow-hidden flex flex-col max-w-4xl mx-auto w-full">
@@ -43,11 +83,27 @@
           <div class="w-20 h-20 bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl flex items-center justify-center">
             <i class="fa fa-comments text-3xl text-blue-500"></i>
           </div>
-          <p class="text-sm">开始一段新的对话吧...</p>
-          <div class="flex gap-2 text-xs">
-            <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">💬 智能问答</span>
-            <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">🖼️ 图片分析</span>
-            <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">🗄️ 数据查询</span>
+          <p v-if="isLoggedIn" class="text-sm">开始一段新的对话吧...</p>
+          <div v-else class="text-center space-y-2">
+            <p class="text-sm text-gray-500">请先登录后使用对话功能</p>
+            <button 
+              @click="openAuthDialog(true)" 
+              class="px-4 py-2 text-sm bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-colors"
+            >
+              立即登录
+            </button>
+          </div>
+          <div class="space-y-2">
+            <div class="flex gap-2 text-xs">
+              <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">💬 智能问答</span>
+              <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">🖼️ 图片分析</span>
+              <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">🗄️ 数据查询</span>
+            </div>
+            <div class="flex gap-2 text-xs">
+              <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">🔍 信息检索</span>
+              <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">📍 位置导航</span>
+              <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">📋 事务处理</span>
+            </div>
           </div>
         </div>
 
@@ -140,8 +196,9 @@
           <!-- 输入框 -->
           <div class="flex gap-3 items-end">
             <button 
-              @click="triggerImageUpload"
-              class="p-3 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0"
+              @click="handleButtonClick(triggerImageUpload)"
+              :disabled="!isLoggedIn"
+              class="p-3 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               :class="{ 'text-blue-500 bg-blue-50': selectedImages.length > 0 }"
               title="上传图片"
             >
@@ -158,8 +215,9 @@
             </button>
 
             <button 
-              @click="triggerFileUpload"
-              class="p-3 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0"
+              @click="handleButtonClick(triggerFileUpload)"
+              :disabled="!isLoggedIn"
+              class="p-3 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               title="上传文件"
             >
               <i class="fa fa-file text-lg"></i>
@@ -172,8 +230,9 @@
             </button>
 
             <button 
-              @click="toggleVoiceRecording"
-              class="p-3 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0"
+              @click="handleButtonClick(toggleVoiceRecording)"
+              :disabled="!isLoggedIn"
+              class="p-3 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               :class="{ 'text-red-500 bg-red-50': isRecording }"
               title="语音输入"
             >
@@ -184,17 +243,19 @@
               <textarea 
                 v-model="userInput" 
                 rows="1" 
-                class="w-full bg-gray-100/50 border-0 rounded-2xl px-4 py-3.5 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all resize-none text-[15px]"
-                placeholder="输入您的问题，按 Enter 发送..."
+                :disabled="!isLoggedIn"
+                class="w-full bg-gray-100/50 border-0 rounded-2xl px-4 py-3.5 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all resize-none text-[15px] disabled:bg-gray-200/50 disabled:cursor-not-allowed"
+                :placeholder="isLoggedIn ? '输入您的问题，按 Enter 发送...' : '请先登录后使用对话功能'"
                 @keydown.enter.prevent="sendMessage"
                 @input="autoResize"
+                @click="handleInputClick"
                 ref="textareaRef"
               ></textarea>
             </div>
 
             <button 
               @click="sendMessage"
-              :disabled="isProcessing || (!userInput.trim() && selectedImages.length === 0)"
+              :disabled="!isLoggedIn || isProcessing || (!userInput.trim() && selectedImages.length === 0)"
               class="p-3.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-300 text-white rounded-xl transition-all duration-200 shadow-lg shadow-blue-500/25 disabled:shadow-none flex-shrink-0"
             >
               <i v-if="!isProcessing" class="fa fa-paper-plane"></i>
@@ -204,7 +265,11 @@
 
           <!-- 提示文字 -->
           <div class="mt-2 text-center">
-            <p class="text-[11px] text-gray-400">按 Enter 发送，Shift + Enter 换行</p>
+            <p v-if="isLoggedIn" class="text-[11px] text-gray-400">按 Enter 发送，Shift + Enter 换行</p>
+            <p v-else class="text-[11px] text-gray-500">
+              <span class="text-blue-500 cursor-pointer hover:text-blue-600" @click="openAuthDialog(true)">登录</span> 或 
+              <span class="text-blue-500 cursor-pointer hover:text-blue-600" @click="openAuthDialog(false)">注册</span> 后即可使用对话功能
+            </p>
           </div>
         </div>
       </div>
@@ -213,7 +278,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch, reactive } from 'vue'
+import { ref, onMounted, watch, reactive, computed } from 'vue'
+import AuthDialog from './components/AuthDialog.vue'
 
 const API_BASE_URL = '/api/v1'
 const sessionId = ref(localStorage.getItem('chat_session_id'))
@@ -230,6 +296,12 @@ let abortController = null
 let mediaRecorder = null
 let audioChunks = []
 
+// 登录状态管理
+const isLoggedIn = ref(localStorage.getItem('isLoggedIn') === 'true')
+const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
+const authDialogVisible = ref(false)
+const authDialogIsLogin = ref(true)
+
 // 清空对话
 const clearChat = () => {
   if (messages.value.length > 0 && confirm('确定要清空所有对话吗？')) {
@@ -238,6 +310,15 @@ const clearChat = () => {
     sessionId.value = null
   }
 }
+
+// 处理输入框点击
+const handleInputClick = () => {
+  if (!isLoggedIn.value) {
+    openAuthDialog(true)
+  }
+}
+
+
 
 // 获取Agent显示标签
 const getAgentLabel = (type) => {
@@ -381,6 +462,11 @@ const toggleVoiceRecording = async () => {
 }
 
 const sendMessage = async () => {
+  if (!isLoggedIn.value) {
+    openAuthDialog(true)
+    return
+  }
+  
   let message = userInput.value.trim()
   if (!message && selectedImages.value.length === 0) return
   if (isProcessing.value) return
@@ -497,6 +583,44 @@ const sendMessage = async () => {
     abortController = null
     isProcessing.value = false
     selectedImages.value = []
+  }
+}
+
+// 打开登录/注册对话框
+const openAuthDialog = (isLogin) => {
+  authDialogIsLogin.value = isLogin
+  authDialogVisible.value = true
+}
+
+// 关闭登录/注册对话框
+const closeAuthDialog = () => {
+  authDialogVisible.value = false
+}
+
+// 处理登录成功
+const handleLoginSuccess = (userData) => {
+  isLoggedIn.value = true
+  user.value = userData
+  localStorage.setItem('isLoggedIn', 'true')
+  localStorage.setItem('user', JSON.stringify(userData))
+}
+
+// 处理按钮点击
+const handleButtonClick = (callback) => {
+  if (!isLoggedIn.value) {
+    openAuthDialog(true)
+    return
+  }
+  callback()
+}
+
+// 退出登录
+const logout = () => {
+  if (confirm('确定要退出登录吗？')) {
+    localStorage.removeItem('isLoggedIn')
+    localStorage.removeItem('user')
+    isLoggedIn.value = false
+    user.value = {}
   }
 }
 
