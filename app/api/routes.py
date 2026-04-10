@@ -1,15 +1,77 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
-from app.models.schemas import AgentResponse, AgentExecuteRequest, MCPToolRequest, DatabaseQueryRequest, ChatRequest
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.schemas import AgentResponse, AgentExecuteRequest, MCPToolRequest, DatabaseQueryRequest, ChatRequest, RegisterRequest, LoginRequest, AuthResponse
 from app.agent.mcp_agent import MCPAgent
 from app.agent.db_agent import DatabaseAgent
 from app.agent.router_agent import RouterAgent
 from app.services.redis_service import redis_service
+from app.services.auth_service import auth_service
+from app.database.connection import get_db
 from loguru import logger
 import json
 
 router = APIRouter(prefix="/api/v1", tags=["agents"])
+
+# 认证路由
+auth_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+@auth_router.post("/register", response_model=AuthResponse)
+async def register(request: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    """用户注册"""
+    try:
+        result = await auth_service.register(
+            db=db,
+            username=request.username,
+            password=request.password,
+            email=request.email
+        )
+        return AuthResponse(**result)
+    except Exception as e:
+        logger.exception(f"注册失败: {e}")
+        return AuthResponse(
+            success=False,
+            message="注册失败，请稍后重试",
+            error=str(e)
+        )
+
+@auth_router.post("/login", response_model=AuthResponse)
+async def login(request: LoginRequest, db: AsyncSession = Depends(get_db)):
+    """用户登录"""
+    try:
+        result = await auth_service.login(
+            db=db,
+            username=request.username,
+            password=request.password,
+            email_code=request.email_code
+        )
+        return AuthResponse(**result)
+    except Exception as e:
+        logger.exception(f"登录失败: {e}")
+        return AuthResponse(
+            success=False,
+            message="登录失败，请稍后重试",
+            error=str(e)
+        )
+
+@auth_router.post("/send-code", response_model=AuthResponse)
+async def send_code(email: str, db: AsyncSession = Depends(get_db)):
+    """发送邮箱验证码"""
+    try:
+        code = await auth_service.create_email_verification(db, email)
+        return AuthResponse(
+            success=True,
+            message="验证码已发送",
+            data={"email": email}
+        )
+    except Exception as e:
+        logger.exception(f"发送验证码失败: {e}")
+        return AuthResponse(
+            success=False,
+            message="发送验证码失败，请稍后重试",
+            error=str(e)
+        )
 
 @router.post("/agent/execute", response_model=AgentResponse)
 async def execute_agent(request: AgentExecuteRequest):

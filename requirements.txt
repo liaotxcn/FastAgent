@@ -17,3 +17,4 @@ langchainhub>=0.1.21
 openai>=1.14.0
 langchain-openai>=0.1.0
 redis==5.0.1
+passlib[bcrypt]==1.7.4

@@ -52,6 +52,13 @@ class Settings(BaseSettings):
     amap_api_key: str 
     amap_api_base: str 
     
+    # 邮箱配置
+    email_from: str
+    smtp_server: str 
+    smtp_port: int 
+    smtp_username: str 
+    smtp_password: str 
+    
     class Config:
         env_file = ".env"
         case_sensitive = False

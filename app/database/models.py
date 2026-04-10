@@ -21,3 +21,31 @@ class AgentCallHistory(Base):
 
     def __repr__(self):
         return f"<AgentCallHistory(id={self.id}, agent_type='{self.agent_type}', created_at='{self.created_at}')>"
+
+class User(Base):
+    """用户表"""
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), nullable=False, unique=True, index=True)
+    email = Column(String(100), nullable=False, unique=True, index=True)
+    password_hash = Column(String(255), nullable=False)
+    is_active = Column(Integer, nullable=False, default=1)  # 1: 活跃, 0: 禁用
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
+
+    def __repr__(self):
+        return f"<User(id={self.id}, username='{self.username}', email='{self.email}')>"
+
+class EmailVerification(Base):
+    """邮箱验证码表"""
+    __tablename__ = "email_verifications"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    email = Column(String(100), nullable=False, index=True)
+    code = Column(String(6), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<EmailVerification(id={self.id}, email='{self.email}', expires_at='{self.expires_at}')>"
