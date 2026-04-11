@@ -140,6 +140,20 @@ class RouterAgent:
         try:
             # 验证图像是否有效
             valid_images = get_valid_images(images)
+            
+            # 构建上下文：从Redis获取历史消息
+            if session_id:
+                history_messages = redis_service.get_messages(session_id)
+                if history_messages:
+                    # 构建上下文消息
+                    context_messages = []
+                    for msg in history_messages:
+                        context_messages.append(f"{msg['role']}: {msg['content']}")
+                    # 将历史消息添加到上下文
+                    if context is None:
+                        context = {}
+                    context["history"] = "\n".join(context_messages)
+            
             if valid_images:
                 route_result = {"agent_type": "vision", "reason": f"检测到{len(valid_images)}张图像输入", "task": user_question}
                 logger.info(f"{len(valid_images)} images detected, routing to VisionAgent")
@@ -201,6 +215,19 @@ class RouterAgent:
         """流式执行路由和任务"""
         try:
             valid_images = get_valid_images(images)
+            
+            # 构建上下文：从Redis获取历史消息
+            if session_id:
+                history_messages = redis_service.get_messages(session_id)
+                if history_messages:
+                    # 构建上下文消息
+                    context_messages = []
+                    for msg in history_messages:
+                        context_messages.append(f"{msg['role']}: {msg['content']}")
+                    # 将历史消息添加到上下文
+                    if context is None:
+                        context = {}
+                    context["history"] = "\n".join(context_messages)
             
             if valid_images:
                 route_result = {"agent_type": "vision", "reason": f"检测到{len(valid_images)}张图像输入", "task": user_question}

@@ -107,6 +107,11 @@ class ChatRequest(BaseModel):
         description="Session ID for multi-turn conversations",
         max_length=100
     )
+    user_id: Optional[str] = Field(
+        None,
+        description="User ID for session association",
+        max_length=100
+    )
     context: Optional[Dict[str, Any]] = None
     images: Optional[List[str]] = Field(
         None,

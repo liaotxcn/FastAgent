@@ -85,8 +85,15 @@ class BaseAgent(ABC):
             
             # 若有工具 --> 使用 agent 流式执行
             if self.tools:
+                # 构建消息列表，包含历史消息
+                messages = []
+                if context and context.get("history"):
+                    # 历史消息格式
+                    messages.append({"role": "user", "content": context["history"]})
+                messages.append({"role": "user", "content": task})
+                
                 async for event in self.agent.astream_events(
-                    {"messages": [{"role": "user", "content": task}]},
+                    {"messages": messages},
                     version="v1"
                 ):
                     if event.get("event") == "on_chat_model_stream":
@@ -100,9 +107,15 @@ class BaseAgent(ABC):
                 # 若无工具 --> 使用 LLM
                 system_prompt = self._get_system_prompt()
                 messages = [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": task}
+                    {"role": "system", "content": system_prompt}
                 ]
+                
+                # 添加历史消息
+                if context and context.get("history"):
+                    messages.append({"role": "user", "content": context["history"]})
+                
+                # 添加当前任务
+                messages.append({"role": "user", "content": task})
                 
                 async for chunk in self.llm.astream(messages):
                     if chunk.content:
@@ -153,11 +166,15 @@ class BaseAgent(ABC):
                 await session.refresh(history)
                 history_id = history.id
             
+            # 构建消息列表，包含历史消息
+            messages = []
+            if context and context.get("history"):
+                # 历史消息格式
+                messages.append({"role": "user", "content": context["history"]})
+            messages.append({"role": "user", "content": task})
+            
             result = await self.agent.ainvoke({
-                "messages": [{
-                    "role": "user",
-                    "content": task
-                }]
+                "messages": messages
             })
             
             # 记录调用成功
