@@ -115,7 +115,6 @@ class RedisService:
         }
         
         message_key = self._get_message_key(session_id)
-        self.redis_client.delete(message_key)
         self.redis_client.lpush(message_key, json.dumps(message))
         self.redis_client.expire(message_key, settings.redis_message_ttl)
         
