@@ -61,9 +61,50 @@ async def rate_limit_middleware(request: Request, call_next):
 app.include_router(router)
 app.include_router(auth_router)
 
+async def warmup_cache():
+    """预热缓存"""
+    try:
+        # 1. 测试Redis连接
+        redis_client.ping()
+        
+        # 2. 预热系统配置
+        config_keys = [
+            "app_title", "app_description", "app_version",
+            "modelscope_model_id", "modelscope_api_base"
+        ]
+        for key in config_keys:
+            value = getattr(settings, key, None)
+            if value:
+                redis_key = f"config:{key}"
+                redis_client.setex(redis_key, 3600, str(value))
+        
+        # 3. 预热Agent描述信息
+        from app.agent.registry import get_agent_descriptions
+        agent_descriptions = get_agent_descriptions()
+        if agent_descriptions:
+            redis_client.setex("agent:descriptions", 3600, agent_descriptions)
+        
+        # 4. 预热工具列表
+        from app.agent.general_agent import GeneralAgent
+        from app.agent.db_agent import DatabaseAgent
+        from app.agent.mcp_agent import MCPAgent
+        
+        agents = [GeneralAgent(), DatabaseAgent(), MCPAgent()]
+        for agent in agents:
+            tools = agent._get_tools()
+            if tools:
+                tool_names = [tool.name for tool in tools]
+                agent_name = agent.__class__.__name__
+                redis_client.setex(f"agent:{agent_name}:tools", 3600, str(tool_names))
+        
+        logger.info("缓存预热完成")
+    except Exception as e:
+        logger.error(f"缓存预热失败: {e}")
+
 @app.on_event("startup")
 async def startup_event():
     logger.info("FastAgent system starting up...")
+    await warmup_cache()
 
 @app.on_event("shutdown")
 async def shutdown_event():
