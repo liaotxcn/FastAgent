@@ -155,7 +155,7 @@ async def smart_chat(request: ChatRequest):
     try:
         session_id = request.session_id
         if not session_id:
-            session_id = redis_service.create_session()
+            session_id = redis_service.create_session(user_id=request.user_id)
         
         router_agent = RouterAgent()
         result = await router_agent.execute(request.message, request.context, session_id, request.images)
@@ -187,7 +187,7 @@ async def smart_chat_stream(request: ChatRequest):
         try:
             session_id = request.session_id
             if not session_id:
-                session_id = redis_service.create_session()
+                session_id = redis_service.create_session(user_id=request.user_id)
             
             yield f"data: {json.dumps({'type': 'session', 'session_id': session_id}, ensure_ascii=False)}\n\n"
             
@@ -306,6 +306,44 @@ async def list_sessions(limit: int = 20, offset: int = 0):
         return AgentResponse(
             success=False,
             message="Failed to list sessions",
+            error=str(e)
+        )
+
+@router.get("/chat/user/{user_id}/sessions")
+async def list_user_sessions(user_id: str, limit: int = 20, offset: int = 0):
+    """获取用户的所有会话列表"""
+    try:
+        sessions = redis_service.list_sessions(user_id=user_id, limit=limit, offset=offset)
+        return AgentResponse(
+            success=True,
+            message="User sessions retrieved successfully",
+            data={"sessions": sessions, "count": len(sessions)},
+            error=None
+        )
+    except Exception as e:
+        logger.exception(f"Failed to list user sessions: {e}")
+        return AgentResponse(
+            success=False,
+            message="Failed to list user sessions",
+            error=str(e)
+        )
+
+@router.get("/chat/session/{session_id}/messages")
+async def get_session_messages(session_id: str, limit: int = 100):
+    """获取会话的消息历史"""
+    try:
+        messages = redis_service.get_messages(session_id, limit=limit)
+        return AgentResponse(
+            success=True,
+            message="Session messages retrieved successfully",
+            data={"messages": messages, "count": len(messages)},
+            error=None
+        )
+    except Exception as e:
+        logger.exception(f"Failed to get session messages: {e}")
+        return AgentResponse(
+            success=False,
+            message="Failed to get session messages",
             error=str(e)
         )
 

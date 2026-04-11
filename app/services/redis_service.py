@@ -42,9 +42,10 @@ class RedisService:
         session_key = self._get_session_key(session_id)
         self.redis_client.setex(session_key, settings.redis_session_ttl, json.dumps(session_data))
         
-        list_key = self._get_session_list_key(user_id)
-        self.redis_client.sadd(list_key, session_id)
-        self.redis_client.expire(list_key, settings.redis_session_ttl)
+        if user_id:
+            list_key = self._get_session_list_key(user_id)
+            self.redis_client.sadd(list_key, session_id)
+            self.redis_client.expire(list_key, settings.redis_session_ttl)
         
         logger.info(f"Session created: {session_id}")
         return session_id
@@ -89,8 +90,13 @@ class RedisService:
         if not self.redis_client:
             return []
         
+        if user_id and not isinstance(user_id, str):
+            user_id = str(user_id)
+        
         list_key = self._get_session_list_key(user_id)
+        logger.info(f"Listing sessions for user {user_id} with key {list_key}")
         session_ids = self.redis_client.smembers(list_key)
+        logger.info(f"Found {len(session_ids)} session IDs: {session_ids}")
         
         sessions = []
         for session_id in session_ids:
@@ -99,6 +105,7 @@ class RedisService:
                 sessions.append(session)
         
         sessions.sort(key=lambda x: x.get("updated_at", 0), reverse=True)
+        logger.info(f"Listed {len(sessions)} sessions for user {user_id}")
         return sessions[offset:offset + limit]
     
     def add_message(self, session_id: str, role: str, content: str, 
