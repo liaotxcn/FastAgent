@@ -22,6 +22,22 @@
           </div>
         </div>
         <div class="flex items-center gap-3">
+          <!-- 历史记录按钮 -->
+          <button 
+            @click="toggleHistory" 
+            class="text-gray-400 hover:text-blue-500 transition-colors p-2 rounded-lg hover:bg-blue-50"
+            title="历史对话"
+          >
+            <i class="fa fa-history"></i>
+          </button>
+          <!-- 清空对话按钮 -->
+          <button 
+            @click="clearChat" 
+            class="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50"
+            title="清空对话"
+          >
+            <i class="fa fa-trash-o"></i>
+          </button>
           <!-- 登录状态 -->
           <div v-if="isLoggedIn" class="flex items-center gap-2">
             <div class="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
@@ -51,13 +67,6 @@
               注册
             </button>
           </div>
-          <button 
-            @click="clearChat" 
-            class="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50"
-            title="清空对话"
-          >
-            <i class="fa fa-trash-o"></i>
-          </button>
         </div>
       </div>
     </header>
@@ -69,6 +78,54 @@
       @close="closeAuthDialog"
       @login-success="handleLoginSuccess"
     />
+
+    <!-- 历史记录侧边栏 -->
+    <div v-if="historyDialogVisible" class="fixed inset-y-0 left-0 bg-white shadow-2xl z-50 w-[320px] max-w-[80vw] flex flex-col transform transition-transform duration-300 ease-in-out">
+      <div class="flex items-center justify-between p-6 border-b border-gray-200">
+        <h2 class="text-xl font-bold text-gray-800">历史对话</h2>
+        <button 
+          @click="historyDialogVisible = false" 
+          class="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-lg hover:bg-gray-100"
+        >
+          <i class="fa fa-times"></i>
+        </button>
+      </div>
+      <div class="flex-1 overflow-y-auto p-4">
+        <div v-if="isLoadingHistory" class="flex items-center justify-center h-32">
+          <div class="loading-dots">
+            <span></span><span></span><span></span>
+          </div>
+        </div>
+        <div v-else-if="sessions.length === 0" class="flex flex-col items-center justify-center h-32 text-gray-400">
+          <i class="fa fa-comments-o text-4xl mb-2"></i>
+          <p>暂无历史对话</p>
+        </div>
+        <div v-else class="space-y-3">
+          <div 
+            v-for="session in sessions" 
+            :key="session.session_id"
+            class="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition-colors cursor-pointer"
+            @click="loadSession(session.session_id)"
+          >
+            <div class="flex items-center justify-between">
+              <h3 class="font-medium text-gray-800 truncate">{{ session.title || '未命名对话' }}</h3>
+              <span class="text-xs text-gray-500">{{ formatTime(session.updated_at) }}</span>
+            </div>
+            <p class="text-sm text-gray-500 mt-1 truncate">{{ session.message_count }} 条消息</p>
+          </div>
+        </div>
+      </div>
+      <div class="p-4 border-t border-gray-200 flex justify-end">
+        <button 
+          @click="historyDialogVisible = false" 
+          class="px-4 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg transition-colors"
+        >
+          关闭
+        </button>
+      </div>
+    </div>
+    <!-- 背景遮罩 -->
+    <div v-if="historyDialogVisible" class="fixed inset-0 bg-black/20 backdrop-blur-sm z-40" @click="historyDialogVisible = false"></div>
 
 
     <!-- 主内容区 -->
@@ -302,6 +359,11 @@ const user = ref(JSON.parse(localStorage.getItem('user') || '{}'))
 const authDialogVisible = ref(false)
 const authDialogIsLogin = ref(true)
 
+// 历史记录管理
+const historyDialogVisible = ref(false)
+const sessions = ref([])
+const isLoadingHistory = ref(false)
+
 // 清空对话
 const clearChat = () => {
   if (messages.value.length > 0 && confirm('确定要清空所有对话吗？')) {
@@ -309,6 +371,95 @@ const clearChat = () => {
     localStorage.removeItem('chat_session_id')
     sessionId.value = null
   }
+}
+
+// 切换历史记录对话框
+const toggleHistory = async () => {
+  if (!isLoggedIn.value) {
+    openAuthDialog(true)
+    return
+  }
+  historyDialogVisible.value = true
+  await loadSessions()
+}
+
+// 加载会话列表
+const loadSessions = async () => {
+  try {
+    isLoadingHistory.value = true
+    let userId = 'anonymous'
+    if (isLoggedIn.value) {
+      if (user.value && user.value.id) {
+        userId = user.value.id.toString()
+      } else {
+        console.error('User ID not found in user object:', user.value)
+      }
+    }
+    console.log('Loading sessions for user:', userId)
+    console.log('User object:', user.value)
+    console.log('Is logged in:', isLoggedIn.value)
+    const response = await fetch(`${API_BASE_URL}/chat/user/${userId}/sessions`)
+    console.log('Response status:', response.status)
+    if (response.ok) {
+      const data = await response.json()
+      console.log('Sessions response:', data)
+      if (data.success) {
+        sessions.value = data.data.sessions
+        console.log('Loaded sessions:', sessions.value)
+      }
+    } else {
+      console.error('Failed to load sessions:', response.status, response.statusText)
+    }
+  } catch (error) {
+    console.error('加载会话失败:', error)
+  } finally {
+    isLoadingHistory.value = false
+  }
+}
+
+// 加载会话详情
+const loadSession = async (sessionIdValue) => {
+  try {
+    isProcessing.value = true
+    sessionId.value = sessionIdValue
+    localStorage.setItem('chat_session_id', sessionIdValue)
+    
+    // 清空当前消息
+    messages.value = []
+    
+    // 加载会话消息
+    const response = await fetch(`${API_BASE_URL}/chat/session/${sessionIdValue}/messages`)
+    if (response.ok) {
+      const data = await response.json()
+      if (data.success) {
+        // 转换消息格式
+        const sessionMessages = data.data.messages.map(msg => ({
+          role: msg.role,
+          content: msg.content,
+          agentType: msg.agent_type,
+          imageCount: msg.metadata?.image_count || 0
+        }))
+        messages.value = sessionMessages
+      }
+    }
+    
+    historyDialogVisible.value = false
+  } catch (error) {
+    console.error('加载会话详情失败:', error)
+  } finally {
+    isProcessing.value = false
+  }
+}
+
+// 格式化时间
+const formatTime = (timestamp) => {
+  const date = new Date(parseInt(timestamp))
+  return date.toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 // 处理输入框点击
@@ -491,11 +642,23 @@ const sendMessage = async () => {
   try {
     abortController = new AbortController()
 
+    // 确保user_id正确获取
+    let userId = 'anonymous'
+    if (isLoggedIn.value) {
+      if (user.value && user.value.id) {
+        userId = user.value.id.toString()
+      } else {
+        console.error('User ID not found in user object:', user.value)
+      }
+    }
     const payload = {
       message: message || '分析图片',
       session_id: sessionId.value || null,
+      user_id: userId,
       images: selectedImages.value
     }
+    console.log('Sending message with payload:', payload)
+    console.log('User ID being used:', userId)
 
     console.log('Sending SSE request:', payload)
 
@@ -603,6 +766,8 @@ const handleLoginSuccess = (userData) => {
   user.value = userData
   localStorage.setItem('isLoggedIn', 'true')
   localStorage.setItem('user', JSON.stringify(userData))
+  console.log('Login success, user data:', userData)
+  console.log('User ID:', userData.id)
 }
 
 // 处理按钮点击
@@ -628,6 +793,11 @@ onMounted(() => {
   // 初始化时聚焦输入框
   if (textareaRef.value) {
     textareaRef.value.focus()
+  }
+  
+  // 页面加载时，检查是否存在session_id
+  if (sessionId.value) {
+    loadSession(sessionId.value)
   }
 })
 </script>
