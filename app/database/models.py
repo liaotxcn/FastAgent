@@ -14,6 +14,8 @@ class AgentCallHistory(Base):
     tool_input = Column(Text, nullable=True)
     tool_output = Column(Text, nullable=True)
     result = Column(Text, nullable=True)
+    evaluation = Column(Text, nullable=True)  # 执行评估结果
+    recovery_strategy = Column(Text, nullable=True)  # 错误恢复策略
     success = Column(Integer, nullable=False, default=1)  # 1: 成功, 0: 失败
     error_message = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
