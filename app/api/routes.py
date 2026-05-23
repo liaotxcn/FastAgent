@@ -155,11 +155,18 @@ async def execute_database_query(request: DatabaseQueryRequest):
 async def smart_chat(request: ChatRequest):
     try:
         session_id = request.session_id
+        if session_id:
+            # 检查会话是否存在
+            existing_session = await redis_service.get_session(session_id)
+            if not existing_session:
+                logger.warning(f"Session {session_id} not found, creating new session")
+                session_id = None
+        
         if not session_id:
             session_id = await redis_service.create_session(user_id=request.user_id)
         
         router_agent = RouterAgent()
-        result = await router_agent.execute(request.message, request.context, session_id, request.images)
+        result = await router_agent.execute(request.message, request.context, session_id, request.images, request.user_id)
         
         result["data"]["session_id"] = session_id
         
@@ -187,14 +194,22 @@ async def smart_chat_stream(request: ChatRequest):
     async def event_generator():
         try:
             session_id = request.session_id
+            if session_id:
+                # 检查会话是否存在
+                existing_session = await redis_service.get_session(session_id)
+                if not existing_session:
+                    logger.warning(f"Session {session_id} not found, creating new session")
+                    session_id = None
+            
             if not session_id:
                 session_id = await redis_service.create_session(user_id=request.user_id)
+                logger.info(f"Created new session for user {request.user_id}: {session_id}")
             
             yield f"data: {json.dumps({'type': 'session', 'session_id': session_id}, ensure_ascii=False)}\n\n"
             
             router_agent = RouterAgent()
             
-            async for data in router_agent.stream_execute(request.message, request.context, session_id, request.images):
+            async for data in router_agent.stream_execute(request.message, request.context, session_id, request.images, request.user_id):
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
             
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"

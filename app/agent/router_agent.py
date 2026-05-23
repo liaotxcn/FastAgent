@@ -134,10 +134,20 @@ class RouterAgent:
             return {"agent_type": "general", "reason": "路由失败", "task": user_question}
     
     async def execute(self, user_question: str, context: Optional[Dict[str, Any]] = None, 
-                      session_id: Optional[str] = None, images: Optional[List[str]] = None) -> Dict[str, Any]:
+                      session_id: Optional[str] = None, images: Optional[List[str]] = None,
+                      user_id: Optional[str] = None) -> Dict[str, Any]:
         try:
             # 验证图像是否有效
             valid_images = get_valid_images(images)
+            
+            # 确保会话关联到用户
+            if session_id and user_id:
+                session_exists = await redis_service.get_session(session_id)
+                if session_exists:
+                    list_key = f"chat:sessions:user:{user_id}"
+                    await redis_service.redis_client.sadd(list_key, session_id)
+                    await redis_service.redis_client.expire(list_key, settings.redis_session_ttl)
+                    logger.info(f"Associated session {session_id} to user {user_id}")
             
             # 构建上下文：从Redis获取历史消息
             if session_id:
@@ -175,14 +185,16 @@ class RouterAgent:
                     session_id=session_id,
                     role="user",
                     content=user_question,
-                    metadata={"has_image": bool(valid_images), "image_count": len(valid_images) if valid_images else 0}
+                    metadata={"has_image": bool(valid_images), "image_count": len(valid_images) if valid_images else 0},
+                    user_id=user_id
                 )
                 await redis_service.add_message(
                     session_id=session_id,
                     role="assistant",
                     content=result["data"].get("output", ""),
                     agent_type=route_result["agent_type"],
-                    metadata={"route_reason": route_result.get("reason", "")}
+                    metadata={"route_reason": route_result.get("reason", "")},
+                    user_id=user_id
                 )
             
             return result
@@ -193,7 +205,8 @@ class RouterAgent:
                     session_id=session_id,
                     role="user",
                     content=user_question,
-                    metadata={"has_image": bool(valid_images), "image_count": len(valid_images) if valid_images else 0}
+                    metadata={"has_image": bool(valid_images), "image_count": len(valid_images) if valid_images else 0},
+                    user_id=user_id
                 )
             result = await self._get_agent("general").execute(user_question, context)
             result["data"]["agent_type"] = "general"
@@ -204,15 +217,26 @@ class RouterAgent:
                     role="assistant",
                     content=result["data"].get("output", ""),
                     agent_type="general",
-                    metadata={"route_reason": "路由失败，使用通用Agent"}
+                    metadata={"route_reason": "路由失败，使用通用Agent"},
+                    user_id=user_id
                 )
             return result
     
     async def stream_execute(self, user_question: str, context: Optional[Dict[str, Any]] = None,
-                            session_id: Optional[str] = None, images: Optional[List[str]] = None) -> AsyncGenerator[Dict[str, Any], None]:
+                            session_id: Optional[str] = None, images: Optional[List[str]] = None,
+                            user_id: Optional[str] = None) -> AsyncGenerator[Dict[str, Any], None]:
         """流式执行路由和任务"""
         try:
             valid_images = get_valid_images(images)
+            
+            # 确保会话关联到用户
+            if session_id and user_id:
+                session_exists = await redis_service.get_session(session_id)
+                if session_exists:
+                    list_key = f"chat:sessions:user:{user_id}"
+                    await redis_service.redis_client.sadd(list_key, session_id)
+                    await redis_service.redis_client.expire(list_key, settings.redis_session_ttl)
+                    logger.info(f"Associated session {session_id} to user {user_id}")
             
             # 构建上下文：从Redis获取历史消息
             if session_id:
@@ -259,14 +283,16 @@ class RouterAgent:
                     session_id=session_id,
                     role="user",
                     content=user_question,
-                    metadata={"has_image": bool(valid_images), "image_count": len(valid_images) if valid_images else 0}
+                    metadata={"has_image": bool(valid_images), "image_count": len(valid_images) if valid_images else 0},
+                    user_id=user_id
                 )
                 await redis_service.add_message(
                     session_id=session_id,
                     role="assistant",
                     content=full_response,
                     agent_type=route_result["agent_type"],
-                    metadata={"route_reason": route_result.get("reason", "")}
+                    metadata={"route_reason": route_result.get("reason", "")},
+                    user_id=user_id
                 )
         
         except Exception as e:

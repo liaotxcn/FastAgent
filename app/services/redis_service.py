@@ -26,13 +26,14 @@ class RedisService:
     
     async def create_session(self, user_id: Optional[str] = None, title: Optional[str] = None) -> str:
         if not self.redis_client:
+            logger.warning("Redis client not available for create_session")
             return str(uuid.uuid4())
         
         session_id = str(uuid.uuid4())
         session_data = {
             "session_id": session_id,
             "user_id": user_id,
-            "title": title,
+            "title": title or "",
             "is_active": True,
             "created_at": str(int(time.time() * 1000)),
             "updated_at": str(int(time.time() * 1000))
@@ -41,12 +42,18 @@ class RedisService:
         session_key = self._get_session_key(session_id)
         await self.redis_client.setex(session_key, settings.redis_session_ttl, json.dumps(session_data))
         
+        all_list_key = self._get_session_list_key(None)
+        await self.redis_client.sadd(all_list_key, session_id)
+        await self.redis_client.expire(all_list_key, settings.redis_session_ttl)
+        logger.info(f"Added session {session_id} to all sessions list")
+        
         if user_id:
             list_key = self._get_session_list_key(user_id)
             await self.redis_client.sadd(list_key, session_id)
             await self.redis_client.expire(list_key, settings.redis_session_ttl)
+            logger.info(f"Added session {session_id} to user {user_id} sessions list")
         
-        logger.info(f"Session created: {session_id}")
+        logger.info(f"Session created: {session_id} for user {user_id}")
         return session_id
     
     async def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
@@ -87,6 +94,7 @@ class RedisService:
     
     async def list_sessions(self, user_id: Optional[str] = None, limit: int = 20, offset: int = 0) -> List[Dict[str, Any]]:
         if not self.redis_client:
+            logger.warning("Redis client not available for list_sessions")
             return []
         
         if user_id and not isinstance(user_id, str):
@@ -102,13 +110,15 @@ class RedisService:
             session = await self.get_session(session_id)
             if session:
                 sessions.append(session)
+                logger.debug(f"Added session: {session.get('session_id')}, title: {session.get('title')}")
         
         sessions.sort(key=lambda x: x.get("updated_at", 0), reverse=True)
         logger.info(f"Listed {len(sessions)} sessions for user {user_id}")
         return sessions[offset:offset + limit]
     
     async def add_message(self, session_id: str, role: str, content: str, 
-                 agent_type: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None) -> None:
+                 agent_type: Optional[str] = None, metadata: Optional[Dict[str, Any]] = None,
+                 user_id: Optional[str] = None) -> None:
         if not self.redis_client:
             return
         
@@ -130,7 +140,19 @@ class RedisService:
             try:
                 data = json.loads(session_data)
                 data["updated_at"] = str(int(time.time() * 1000))
+                
+                if role == "user" and not data.get("title"):
+                    data["title"] = content[:30] + ("..." if len(content) > 30 else "")
+                
                 await self.redis_client.setex(session_key, settings.redis_session_ttl, json.dumps(data))
+                
+                # 确保会话在用户列表中
+                if user_id:
+                    list_key = self._get_session_list_key(user_id)
+                    await self.redis_client.sadd(list_key, session_id)
+                    await self.redis_client.expire(list_key, settings.redis_session_ttl)
+                    logger.debug(f"Ensured session {session_id} in user {user_id} list")
+                    
             except json.JSONDecodeError:
                 pass
     
