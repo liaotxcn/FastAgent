@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +11,7 @@ from app.services.auth_service import auth_service
 from app.database.connection import get_db
 from loguru import logger
 import json
+from typing import Optional
 
 router = APIRouter(prefix="/api/v1", tags=["agents"])
 
@@ -154,11 +155,18 @@ async def execute_database_query(request: DatabaseQueryRequest):
 async def smart_chat(request: ChatRequest):
     try:
         session_id = request.session_id
+        if session_id:
+            # 检查会话是否存在
+            existing_session = await redis_service.get_session(session_id)
+            if not existing_session:
+                logger.warning(f"Session {session_id} not found, creating new session")
+                session_id = None
+        
         if not session_id:
-            session_id = redis_service.create_session(user_id=request.user_id)
+            session_id = await redis_service.create_session(user_id=request.user_id)
         
         router_agent = RouterAgent()
-        result = await router_agent.execute(request.message, request.context, session_id, request.images)
+        result = await router_agent.execute(request.message, request.context, session_id, request.images, request.user_id)
         
         result["data"]["session_id"] = session_id
         
@@ -186,14 +194,22 @@ async def smart_chat_stream(request: ChatRequest):
     async def event_generator():
         try:
             session_id = request.session_id
+            if session_id:
+                # 检查会话是否存在
+                existing_session = await redis_service.get_session(session_id)
+                if not existing_session:
+                    logger.warning(f"Session {session_id} not found, creating new session")
+                    session_id = None
+            
             if not session_id:
-                session_id = redis_service.create_session(user_id=request.user_id)
+                session_id = await redis_service.create_session(user_id=request.user_id)
+                logger.info(f"Created new session for user {request.user_id}: {session_id}")
             
             yield f"data: {json.dumps({'type': 'session', 'session_id': session_id}, ensure_ascii=False)}\n\n"
             
             router_agent = RouterAgent()
             
-            async for data in router_agent.stream_execute(request.message, request.context, session_id, request.images):
+            async for data in router_agent.stream_execute(request.message, request.context, session_id, request.images, request.user_id):
                 yield f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
             
             yield f"data: {json.dumps({'type': 'done'}, ensure_ascii=False)}\n\n"
@@ -226,13 +242,14 @@ async def health_check():
     )
 
 @router.post("/chat/session")
-async def create_session():
+async def create_session(user_id: Optional[str] = None):
     try:
-        session_id = redis_service.create_session()
+        session_id = await redis_service.create_session(user_id=user_id)
+        session = await redis_service.get_session(session_id)
         return AgentResponse(
             success=True,
             message="Session created successfully",
-            data={"session_id": session_id},
+            data={"session_id": session_id, "session": session},
             error=None
         )
     except Exception as e:
@@ -243,10 +260,41 @@ async def create_session():
             error=str(e)
         )
 
+@router.get("/chat/user/{user_id}/last-session")
+async def get_user_last_session(user_id: str):
+    """获取用户最近的活跃会话"""
+    try:
+        sessions = await redis_service.list_sessions(user_id=user_id, limit=1, offset=0)
+        if sessions:
+            session_id = sessions[0]["session_id"]
+            messages = await redis_service.get_messages(session_id, limit=100)
+            return AgentResponse(
+                success=True,
+                message="Last session retrieved",
+                data={"session": sessions[0], "messages": messages, "count": len(messages)},
+                error=None
+            )
+        else:
+            session_id = await redis_service.create_session(user_id=user_id)
+            session = await redis_service.get_session(session_id)
+            return AgentResponse(
+                success=True,
+                message="No existing session found, created new session",
+                data={"session": session, "messages": [], "count": 0},
+                error=None
+            )
+    except Exception as e:
+        logger.exception(f"Failed to get last session: {e}")
+        return AgentResponse(
+            success=False,
+            message="Failed to get last session",
+            error=str(e)
+        )
+
 @router.get("/chat/session/{session_id}")
 async def get_session(session_id: str):
     try:
-        session = redis_service.get_session(session_id)
+        session = await redis_service.get_session(session_id)
         if not session:
             return AgentResponse(
                 success=False,
@@ -270,7 +318,7 @@ async def get_session(session_id: str):
 @router.delete("/chat/session/{session_id}")
 async def delete_session(session_id: str):
     try:
-        deleted = redis_service.delete_session(session_id)
+        deleted = await redis_service.delete_session(session_id)
         if not deleted:
             return AgentResponse(
                 success=False,
@@ -294,7 +342,7 @@ async def delete_session(session_id: str):
 @router.get("/chat/sessions")
 async def list_sessions(limit: int = 20, offset: int = 0):
     try:
-        sessions = redis_service.list_sessions(limit=limit, offset=offset)
+        sessions = await redis_service.list_sessions(limit=limit, offset=offset)
         return AgentResponse(
             success=True,
             message="Sessions retrieved successfully",
@@ -313,7 +361,7 @@ async def list_sessions(limit: int = 20, offset: int = 0):
 async def list_user_sessions(user_id: str, limit: int = 20, offset: int = 0):
     """获取用户的所有会话列表"""
     try:
-        sessions = redis_service.list_sessions(user_id=user_id, limit=limit, offset=offset)
+        sessions = await redis_service.list_sessions(user_id=user_id, limit=limit, offset=offset)
         return AgentResponse(
             success=True,
             message="User sessions retrieved successfully",
@@ -332,7 +380,7 @@ async def list_user_sessions(user_id: str, limit: int = 20, offset: int = 0):
 async def get_session_messages(session_id: str, limit: int = 100):
     """获取会话的消息历史"""
     try:
-        messages = redis_service.get_messages(session_id, limit=limit)
+        messages = await redis_service.get_messages(session_id, limit=limit)
         return AgentResponse(
             success=True,
             message="Session messages retrieved successfully",
@@ -344,23 +392,5 @@ async def get_session_messages(session_id: str, limit: int = 100):
         return AgentResponse(
             success=False,
             message="Failed to get session messages",
-            error=str(e)
-        )
-
-@router.get("/chat/session/{session_id}/messages")
-async def get_messages(session_id: str, limit: int = 100):
-    try:
-        messages = redis_service.get_messages(session_id, limit)
-        return AgentResponse(
-            success=True,
-            message="Messages retrieved successfully",
-            data={"messages": messages, "count": len(messages)},
-            error=None
-        )
-    except Exception as e:
-        logger.exception(f"Failed to get messages: {e}")
-        return AgentResponse(
-            success=False,
-            message="Failed to get messages",
             error=str(e)
         )

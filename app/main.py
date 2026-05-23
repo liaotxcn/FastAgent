@@ -2,10 +2,9 @@ from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 import time
-import redis
+import redis.asyncio as redis
 from app.config import settings
 from app.api.routes import router, auth_router
-from app.config import settings
 from loguru import logger
 
 # 配置 Loguru 日志
@@ -35,24 +34,22 @@ redis_client = redis.from_url(settings.redis_url, decode_responses=True)
 # 自定义限流中间件
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    # 基于 IP 限流
     ip = request.client.host
     key = f"rate_limit:{ip}"
     
     try:
         # 获取当前计数
-        current = redis_client.get(key)
+        current = await redis_client.get(key)
         if current:
             current = int(current)
-            if current >= 10:  # 每分钟最多 10 个请求
+            if current >= 10:
                 raise HTTPException(status_code=429, detail="Too Many Requests")
             # 增加计数
-            redis_client.incr(key)
+            await redis_client.incr(key)
         else:
             # 设置初始值并过期时间
-            redis_client.setex(key, 60, 1)  # 60秒过期
+            await redis_client.setex(key, 60, 1)
     except Exception as e:
-        # Redis 错误时不影响请求
         pass
     
     response = await call_next(request)
@@ -62,7 +59,6 @@ app.include_router(router)
 app.include_router(auth_router)
 
 async def warmup_cache():
-    """预热缓存"""
     try:
         # 1. 测试Redis连接
         redis_client.ping()
@@ -76,13 +72,13 @@ async def warmup_cache():
             value = getattr(settings, key, None)
             if value:
                 redis_key = f"config:{key}"
-                redis_client.setex(redis_key, 3600, str(value))
+                await redis_client.setex(redis_key, 3600, str(value))
         
         # 3. 预热Agent描述信息
         from app.agent.registry import get_agent_descriptions
         agent_descriptions = get_agent_descriptions()
         if agent_descriptions:
-            redis_client.setex("agent:descriptions", 3600, agent_descriptions)
+            await redis_client.setex("agent:descriptions", 3600, agent_descriptions)
         
         # 4. 预热工具列表
         from app.agent.general_agent import GeneralAgent
@@ -95,7 +91,7 @@ async def warmup_cache():
             if tools:
                 tool_names = [tool.name for tool in tools]
                 agent_name = agent.__class__.__name__
-                redis_client.setex(f"agent:{agent_name}:tools", 3600, str(tool_names))
+                await redis_client.setex(f"agent:{agent_name}:tools", 3600, str(tool_names))
         
         logger.info("缓存预热完成")
     except Exception as e:
@@ -109,6 +105,7 @@ async def startup_event():
 @app.on_event("shutdown")
 async def shutdown_event():
     logger.info("FastAgent system shutting down...")
+    await redis_client.close()
 
 @app.get("/")
 async def root():
