@@ -1,68 +1,68 @@
 <template>
-  <div class="flex flex-col h-screen bg-gradient-to-br from-gray-50 to-gray-100 relative overflow-hidden">
-    <!-- 背景图片 -->
-    <div class="absolute top-0 left-0 w-1/3 h-full opacity-10 pointer-events-none">
-      <img src="/src/hello.png" alt="Background" class="absolute top-20 left-10 w-40 h-40 object-contain" />
-      <img src="/src/run.png" alt="Background" class="absolute bottom-20 left-10 w-40 h-40 object-contain" />
+  <div class="flex flex-col h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 relative overflow-hidden">
+    <!-- 背景装饰 -->
+    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+      <div class="absolute top-20 left-10 w-96 h-96 bg-gradient-to-br from-blue-400/10 to-purple-400/10 rounded-full blur-3xl"></div>
+      <div class="absolute bottom-20 right-10 w-80 h-80 bg-gradient-to-br from-indigo-400/10 to-pink-400/10 rounded-full blur-3xl"></div>
     </div>
-    <div class="absolute top-0 right-0 w-1/3 h-full opacity-10 pointer-events-none">
-      <img src="/src/sleep.png" alt="Background" class="absolute top-20 right-10 w-40 h-40 object-contain" />
-      <img src="/src/logo.png" alt="Background" class="absolute bottom-20 right-10 w-40 h-40 object-contain" />
-    </div>
+    
     <!-- 顶部导航 -->
-    <header class="bg-white/80 backdrop-blur-md border-b border-gray-200/50 px-6 py-4 sticky top-0 z-10">
-      <div class="max-w-4xl mx-auto flex items-center justify-between">
+    <header class="bg-white/70 backdrop-blur-xl border-b border-gray-200/50 px-6 py-4 sticky top-0 z-10 shadow-sm">
+      <div class="max-w-5xl mx-auto flex items-center justify-between">
         <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden shadow-lg shadow-blue-500/20">
-            <img src="/src/logo.png" alt="FastAgent" class="w-full h-full object-contain" />
+          <div class="w-10 h-10 rounded-xl flex items-center justify-center overflow-hidden shadow-xl shadow-blue-500/30 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 relative">
+            <div class="absolute inset-0 bg-white/10 rounded-xl"></div>
+            <img src="/src/resources/logo.png" alt="FastAgent" class="w-full h-full object-contain p-1.5 relative z-10" />
           </div>
           <div>
             <h1 class="text-xl font-bold bg-gradient-to-r from-gray-800 to-gray-600 bg-clip-text text-transparent">FastAgent</h1>
             <p class="text-xs text-gray-500">智能助手</p>
           </div>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex items-center gap-2">
           <!-- 历史记录按钮 -->
           <button 
             @click="toggleHistory" 
-            class="text-gray-400 hover:text-blue-500 transition-colors p-2 rounded-lg hover:bg-blue-50"
+            class="text-gray-500 hover:text-blue-600 hover:bg-blue-50 transition-all duration-200 p-2.5 rounded-xl"
             title="历史对话"
           >
-            <i class="fa fa-history"></i>
+            <i class="fa fa-history text-lg"></i>
           </button>
           <!-- 清空对话按钮 -->
           <button 
             @click="clearChat" 
-            class="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50"
+            class="text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all duration-200 p-2.5 rounded-xl"
             title="清空对话"
           >
-            <i class="fa fa-trash-o"></i>
+            <i class="fa fa-trash-o text-lg"></i>
           </button>
+          <!-- 分隔线 -->
+          <div class="w-px h-8 bg-gray-200 mx-2"></div>
           <!-- 登录状态 -->
-          <div v-if="isLoggedIn" class="flex items-center gap-2">
-            <div class="w-8 h-8 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
+          <div v-if="isLoggedIn" class="flex items-center gap-3">
+            <div class="w-9 h-9 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center text-white font-semibold text-sm shadow-lg shadow-blue-500/30">
               {{ user.username.charAt(0).toUpperCase() }}
             </div>
-            <span class="text-sm font-medium text-gray-700">{{ user.username }}</span>
+            <span class="text-sm font-medium text-gray-700 hidden sm:inline">{{ user.username }}</span>
             <button 
               @click="logout" 
-              class="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50"
+              class="text-gray-500 hover:text-red-600 hover:bg-red-50 transition-all duration-200 p-2.5 rounded-xl"
               title="退出登录"
             >
-              <i class="fa fa-sign-out"></i>
+              <i class="fa fa-sign-out text-lg"></i>
             </button>
           </div>
           <!-- 未登录状态 -->
           <div v-else class="flex items-center gap-2">
             <button 
               @click="openAuthDialog(true)" 
-              class="px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              class="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 transition-all duration-200 shadow-sm"
             >
               登录
             </button>
             <button 
               @click="openAuthDialog(false)" 
-              class="px-3 py-1.5 text-sm bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-colors"
+              class="px-4 py-2 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30"
             >
               注册
             </button>
@@ -80,123 +80,129 @@
     />
 
     <!-- 历史记录侧边栏 -->
-    <div v-if="historyDialogVisible" class="fixed inset-y-0 left-0 bg-white shadow-2xl z-50 w-[320px] max-w-[80vw] flex flex-col transform transition-transform duration-300 ease-in-out">
-      <div class="flex items-center justify-between p-6 border-b border-gray-200">
-        <h2 class="text-xl font-bold text-gray-800">历史对话</h2>
+    <div v-if="historyDialogVisible" class="fixed inset-y-0 left-0 bg-white/95 backdrop-blur-xl shadow-2xl z-50 w-[380px] max-w-[90vw] flex flex-col transform transition-all duration-300 ease-out">
+      <div class="flex items-center justify-between p-6 border-b border-gray-100">
+        <div>
+          <h2 class="text-xl font-bold text-gray-800">历史对话</h2>
+          <p class="text-xs text-gray-500 mt-1">{{ sessions.length }} 条记录</p>
+        </div>
         <button 
           @click="historyDialogVisible = false" 
-          class="text-gray-400 hover:text-gray-600 transition-colors p-2 rounded-lg hover:bg-gray-100"
+          class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all duration-200 p-2.5 rounded-xl"
         >
-          <i class="fa fa-times"></i>
+          <i class="fa fa-times text-lg"></i>
         </button>
       </div>
-      <div class="flex-1 overflow-y-auto p-4">
-        <div v-if="isLoadingHistory" class="flex items-center justify-center h-32">
+      <div class="flex-1 overflow-y-auto p-4 space-y-3">
+        <!-- 加载状态 -->
+        <div v-if="isLoadingHistory" class="flex items-center justify-center h-40">
           <div class="loading-dots">
             <span></span><span></span><span></span>
           </div>
         </div>
-        <div v-else-if="sessions.length === 0" class="flex flex-col items-center justify-center h-32 text-gray-400">
-          <i class="fa fa-comments-o text-4xl mb-2"></i>
-          <p>暂无历史对话</p>
+        <!-- 空状态 -->
+        <div v-else-if="sessions.length === 0" class="flex flex-col items-center justify-center h-40 text-gray-400">
+          <div class="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-3">
+            <i class="fa fa-comments-o text-3xl text-gray-300"></i>
+          </div>
+          <p class="text-sm">暂无历史对话</p>
+          <p class="text-xs text-gray-400 mt-1">开始对话后将自动保存</p>
         </div>
+        <!-- 会话列表 -->
         <div v-else class="space-y-3">
           <div 
             v-for="session in sessions" 
             :key="session.session_id"
-            class="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition-colors cursor-pointer"
+            class="group bg-gradient-to-br from-gray-50 to-white rounded-2xl p-4 hover:from-blue-50 hover:to-indigo-50 transition-all duration-200 cursor-pointer border border-gray-100 hover:border-blue-200"
             @click="loadSession(session.session_id)"
           >
-            <div class="flex items-center justify-between">
-              <h3 class="font-medium text-gray-800 truncate">{{ session.title || '未命名对话' }}</h3>
-              <span class="text-xs text-gray-500">{{ formatTime(session.updated_at) }}</span>
+            <div class="flex items-start justify-between gap-3">
+              <div class="flex-1 min-w-0">
+                <h3 class="font-medium text-gray-800 truncate group-hover:text-blue-600 transition-colors">{{ session.title || '未命名对话' }}</h3>
+                <p class="text-xs text-gray-500 mt-1.5">{{ session.message_count }} 条消息</p>
+              </div>
+              <span class="text-xs text-gray-400 whitespace-nowrap">{{ formatTime(session.updated_at) }}</span>
             </div>
-            <p class="text-sm text-gray-500 mt-1 truncate">{{ session.message_count }} 条消息</p>
           </div>
         </div>
       </div>
-      <div class="p-4 border-t border-gray-200 flex justify-end">
-        <button 
-          @click="historyDialogVisible = false" 
-          class="px-4 py-2 text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 rounded-lg transition-colors"
-        >
-          关闭
-        </button>
-      </div>
     </div>
     <!-- 背景遮罩 -->
-    <div v-if="historyDialogVisible" class="fixed inset-0 bg-black/20 backdrop-blur-sm z-40" @click="historyDialogVisible = false"></div>
-
+    <div v-if="historyDialogVisible" class="fixed inset-0 bg-gray-900/20 backdrop-blur-sm z-40 transition-opacity duration-300" @click="historyDialogVisible = false"></div>
 
     <!-- 主内容区 -->
-    <main class="flex-1 overflow-hidden flex flex-col max-w-4xl mx-auto w-full">
+    <main class="flex-1 overflow-hidden flex flex-col max-w-5xl mx-auto w-full relative">
       <!-- 聊天区域 -->
       <div 
         ref="chatContainer" 
-        class="flex-1 overflow-y-auto p-4 space-y-6 scroll-smooth"
+        class="flex-1 overflow-y-auto p-6 space-y-6 scroll-smooth"
       >
         <!-- 空状态 -->
-        <div v-if="messages.length === 0" class="flex flex-col items-center justify-center h-full text-gray-400 space-y-4">
-          <div class="w-20 h-20 bg-gradient-to-br from-blue-100 to-purple-100 rounded-2xl flex items-center justify-center">
-            <i class="fa fa-comments text-3xl text-blue-500"></i>
+        <div v-if="messages.length === 0" class="flex flex-col items-center justify-center h-full min-h-[60vh] text-gray-400 space-y-6">
+          <div class="w-24 h-24 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-3xl flex items-center justify-center shadow-xl shadow-blue-500/10">
+            <i class="fa fa-comments text-4xl text-blue-500"></i>
           </div>
-          <p v-if="isLoggedIn" class="text-sm">开始一段新的对话吧...</p>
-          <div v-else class="text-center space-y-2">
-            <p class="text-sm text-gray-500">请先登录后使用对话功能</p>
-            <button 
-              @click="openAuthDialog(true)" 
-              class="px-4 py-2 text-sm bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-colors"
-            >
-              立即登录
-            </button>
-          </div>
-          <div class="space-y-2">
-            <div class="flex gap-2 text-xs">
-              <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">💬 智能问答</span>
-              <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">🖼️ 图片分析</span>
-              <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">🗄️ 数据查询</span>
+          <div class="text-center space-y-2">
+            <p v-if="isLoggedIn" class="text-lg font-medium text-gray-600">开始一段新的对话吧</p>
+            <div v-else class="space-y-3">
+              <p class="text-sm text-gray-500">登录后即可使用智能对话功能</p>
+              <button 
+                @click="openAuthDialog(true)" 
+                class="px-6 py-3 text-sm font-medium text-white bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl hover:from-blue-700 hover:to-indigo-700 transition-all duration-200 shadow-lg shadow-blue-500/30"
+              >
+                立即登录
+              </button>
             </div>
-            <div class="flex gap-2 text-xs">
-              <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">🔍 信息检索</span>
-              <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">📍 位置导航</span>
-              <span class="px-3 py-1 bg-white rounded-full shadow-sm text-gray-500">📋 事务处理</span>
+          </div>
+          <!-- 功能标签 -->
+          <div v-if="isLoggedIn" class="space-y-3">
+            <div class="flex flex-wrap justify-center gap-2 text-xs">
+              <span class="px-4 py-2 bg-white/80 backdrop-blur rounded-full shadow-sm text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-all cursor-pointer">💬 智能问答</span>
+              <span class="px-4 py-2 bg-white/80 backdrop-blur rounded-full shadow-sm text-gray-600 hover:bg-purple-50 hover:text-purple-600 transition-all cursor-pointer">🖼️ 图片分析</span>
+              <span class="px-4 py-2 bg-white/80 backdrop-blur rounded-full shadow-sm text-gray-600 hover:bg-green-50 hover:text-green-600 transition-all cursor-pointer">🗄️ 数据查询</span>
+            </div>
+            <div class="flex flex-wrap justify-center gap-2 text-xs">
+              <span class="px-4 py-2 bg-white/80 backdrop-blur rounded-full shadow-sm text-gray-600 hover:bg-orange-50 hover:text-orange-600 transition-all cursor-pointer">🔍 信息检索</span>
+              <span class="px-4 py-2 bg-white/80 backdrop-blur rounded-full shadow-sm text-gray-600 hover:bg-pink-50 hover:text-pink-600 transition-all cursor-pointer">📍 位置导航</span>
+              <span class="px-4 py-2 bg-white/80 backdrop-blur rounded-full shadow-sm text-gray-600 hover:bg-teal-50 hover:text-teal-600 transition-all cursor-pointer">📋 事务处理</span>
             </div>
           </div>
         </div>
 
         <!-- 消息列表 -->
-        <transition-group name="message">
+        <transition-group name="message" tag="div" class="space-y-6">
           <div 
             v-for="(message, index) in messages" 
             :key="index"
-            class="message flex animate-fade-in" 
+            class="message flex animate-slide-up" 
             :class="message.role === 'user' ? 'justify-end' : 'justify-start'"
           >
             <!-- AI头像 -->
-            <div v-if="message.role === 'assistant'" class="mr-3 flex-shrink-0">
-              <div class="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden shadow-md">
-                <img src="/src/logo.png" alt="AI" class="w-full h-full object-contain" />
+            <div v-if="message.role === 'assistant'" class="mr-4 flex-shrink-0">
+              <div class="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden shadow-xl shadow-blue-500/30 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 relative animate-float">
+                <div class="absolute inset-0 bg-white/20 rounded-full"></div>
+                <img src="/src/resources/logo.png" alt="AI" class="w-full h-full object-contain p-1.5 relative z-10" />
               </div>
             </div>
 
             <!-- 消息气泡 -->
             <div 
-              class="max-w-[75%] rounded-2xl px-5 py-3.5 shadow-sm" 
+              class="max-w-[70%] rounded-2xl px-5 py-4 shadow-lg" 
               :class="message.role === 'user' 
-                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-br-md shadow-blue-500/20' 
-                : 'bg-white text-gray-800 rounded-bl-md shadow-gray-200/50 border border-gray-100'"
+                ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-br-md shadow-blue-500/30' 
+                : 'bg-white/95 backdrop-blur text-gray-800 rounded-bl-md shadow-gray-200/50 border border-gray-100'"
             >
               <!-- Agent类型标签 -->
-              <div v-if="message.role === 'assistant' && message.agentType" class="flex items-center gap-1.5 mb-2">
-                <span class="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-600 rounded-full font-medium">
+              <div v-if="message.role === 'assistant' && message.agentType" class="flex items-center gap-2 mb-3">
+                <span class="text-xs px-2.5 py-1 bg-gradient-to-r from-blue-50 to-indigo-50 text-blue-600 rounded-lg font-medium">
                   {{ getAgentLabel(message.agentType) }}
                 </span>
               </div>
 
               <!-- 图片标记 -->
-              <div v-if="message.role === 'user' && message.imageCount > 0" class="flex items-center gap-1.5 mb-2 text-blue-100">
-                <i class="fa fa-image text-xs"></i>
-                <span class="text-xs">{{ message.imageCount }}张图片</span>
+              <div v-if="message.role === 'user' && message.imageCount > 0" class="flex items-center gap-2 mb-3 text-blue-100">
+                <i class="fa fa-image"></i>
+                <span class="text-sm">{{ message.imageCount }}张图片</span>
               </div>
 
               <!-- 消息内容 -->
@@ -204,22 +210,23 @@
             </div>
 
             <!-- 用户头像 -->
-            <div v-if="message.role === 'user'" class="ml-3 flex-shrink-0">
-              <div class="w-8 h-8 bg-gradient-to-br from-gray-400 to-gray-500 rounded-full flex items-center justify-center shadow-md">
-                <i class="fa fa-user text-white text-xs"></i>
+            <div v-if="message.role === 'user'" class="ml-4 flex-shrink-0">
+              <div class="w-10 h-10 bg-gradient-to-br from-gray-400 to-gray-500 rounded-2xl flex items-center justify-center shadow-lg">
+                <i class="fa fa-user text-white text-sm"></i>
               </div>
             </div>
           </div>
         </transition-group>
 
         <!-- 加载状态 -->
-        <div v-if="isProcessing" class="message flex justify-start animate-fade-in">
-          <div class="mr-3 flex-shrink-0">
-            <div class="w-8 h-8 rounded-full flex items-center justify-center overflow-hidden shadow-md">
-              <img src="/src/logo.png" alt="AI" class="w-full h-full object-contain" />
+        <div v-if="isProcessing" class="message flex justify-start animate-slide-up">
+          <div class="mr-4 flex-shrink-0">
+            <div class="w-10 h-10 rounded-full flex items-center justify-center overflow-hidden shadow-xl shadow-blue-500/40 bg-gradient-to-br from-blue-500 via-indigo-500 to-purple-600 relative animate-pulse-slow">
+              <div class="absolute inset-0 bg-white/25 rounded-full"></div>
+              <img src="/src/resources/logo.png" alt="AI" class="w-full h-full object-contain p-1.5 relative z-10" />
             </div>
           </div>
-          <div class="bg-white rounded-2xl rounded-bl-md shadow-sm border border-gray-100 px-5 py-4">
+          <div class="bg-white/95 backdrop-blur rounded-2xl rounded-bl-md shadow-lg border border-gray-100 px-6 py-4">
             <div class="loading-dots">
               <span></span><span></span><span></span>
             </div>
@@ -228,10 +235,10 @@
       </div>
 
       <!-- 输入区域 -->
-      <div class="bg-white/80 backdrop-blur-md border-t border-gray-200/50 p-4">
-        <div class="max-w-4xl mx-auto">
+      <div class="bg-white/80 backdrop-blur-xl border-t border-gray-200/50 p-5 shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
+        <div class="max-w-5xl mx-auto">
           <!-- 图片预览 -->
-          <div v-if="selectedImages.length > 0" class="flex gap-2 mb-3 flex-wrap">
+          <div v-if="selectedImages.length > 0" class="flex gap-3 mb-4 flex-wrap">
             <div 
               v-for="(src, index) in selectedImages" 
               :key="index"
@@ -239,28 +246,29 @@
             >
               <img 
                 :src="src" 
-                class="w-14 h-14 object-cover rounded-lg border border-gray-200 group-hover:border-blue-400 transition-colors"
+                class="w-16 h-16 object-cover rounded-xl border-2 border-gray-200 group-hover:border-blue-400 transition-all duration-200 shadow-md"
               />
               <button 
                 @click="removeImage(index)"
-                class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md hover:bg-red-600"
+                class="absolute -top-2 -right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg hover:bg-red-600 hover:scale-110"
               >
-                <i class="fa fa-times text-[10px]"></i>
+                <i class="fa fa-times text-xs"></i>
               </button>
             </div>
           </div>
 
           <!-- 输入框 -->
           <div class="flex gap-3 items-end">
+            <!-- 图片上传 -->
             <button 
               @click="handleButtonClick(triggerImageUpload)"
               :disabled="!isLoggedIn"
-              class="p-3 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-              :class="{ 'text-blue-500 bg-blue-50': selectedImages.length > 0 }"
+              class="p-3 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              :class="{ 'text-blue-600 bg-blue-50': selectedImages.length > 0 }"
               title="上传图片"
             >
               <i class="fa fa-image text-lg"></i>
-              <span v-if="selectedImages.length > 0" class="ml-1 text-xs font-medium">{{ selectedImages.length }}</span>
+              <span v-if="selectedImages.length > 0" class="ml-1 text-xs font-semibold">{{ selectedImages.length }}</span>
               <input 
                 ref="imageInput" 
                 type="file" 
@@ -271,10 +279,11 @@
               />
             </button>
 
+            <!-- 文件上传 -->
             <button 
               @click="handleButtonClick(triggerFileUpload)"
               :disabled="!isLoggedIn"
-              class="p-3 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="p-3 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               title="上传文件"
             >
               <i class="fa fa-file text-lg"></i>
@@ -286,46 +295,54 @@
               />
             </button>
 
+            <!-- 语音输入 -->
             <button 
               @click="handleButtonClick(toggleVoiceRecording)"
               :disabled="!isLoggedIn"
-              class="p-3 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-              :class="{ 'text-red-500 bg-red-50': isRecording }"
+              class="p-3 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-xl transition-all duration-200 flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              :class="{ 'text-red-500 bg-red-50 animate-pulse': isRecording }"
               title="语音输入"
             >
               <i class="fa fa-microphone text-lg"></i>
             </button>
 
+            <!-- 输入框 -->
             <div class="flex-1 relative">
               <textarea 
                 v-model="userInput" 
                 rows="1" 
                 :disabled="!isLoggedIn"
-                class="w-full bg-gray-100/50 border-0 rounded-2xl px-4 py-3.5 pr-12 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all resize-none text-[15px] disabled:bg-gray-200/50 disabled:cursor-not-allowed"
-                :placeholder="isLoggedIn ? '输入您的问题，按 Enter 发送...' : '请先登录后使用对话功能'"
+                class="w-full bg-gray-50/80 border-2 border-gray-200 rounded-2xl px-5 py-4 pr-14 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 focus:bg-white transition-all resize-none text-[15px] disabled:bg-gray-100 disabled:cursor-not-allowed shadow-sm"
+                :placeholder="isLoggedIn ? '输入您的问题...' : '请先登录后使用'"
                 @keydown.enter.prevent="sendMessage"
                 @input="autoResize"
                 @click="handleInputClick"
                 ref="textareaRef"
               ></textarea>
+              <div class="absolute right-3 bottom-3 text-xs text-gray-400">
+                {{ userInput.length > 0 ? userInput.length : '' }}
+              </div>
             </div>
 
+            <!-- 发送按钮 -->
             <button 
               @click="sendMessage"
               :disabled="!isLoggedIn || isProcessing || (!userInput.trim() && selectedImages.length === 0)"
-              class="p-3.5 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 disabled:from-gray-300 disabled:to-gray-300 text-white rounded-xl transition-all duration-200 shadow-lg shadow-blue-500/25 disabled:shadow-none flex-shrink-0"
+              class="p-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-300 disabled:to-gray-300 text-white rounded-2xl transition-all duration-200 shadow-lg disabled:shadow-none flex-shrink-0 hover:scale-105 disabled:hover:scale-100 active:scale-95"
             >
-              <i v-if="!isProcessing" class="fa fa-paper-plane"></i>
-              <i v-else class="fa fa-spinner fa-spin"></i>
+              <i v-if="!isProcessing" class="fa fa-paper-plane text-lg"></i>
+              <i v-else class="fa fa-spinner fa-spin text-lg"></i>
             </button>
           </div>
 
           <!-- 提示文字 -->
-          <div class="mt-2 text-center">
-            <p v-if="isLoggedIn" class="text-[11px] text-gray-400">按 Enter 发送，Shift + Enter 换行</p>
+          <div class="mt-3 text-center">
+            <p v-if="isLoggedIn" class="text-[11px] text-gray-400">
+              按 <kbd class="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600 font-mono">Enter</kbd> 发送，<kbd class="px-1.5 py-0.5 bg-gray-100 rounded text-gray-600 font-mono">Shift + Enter</kbd> 换行
+            </p>
             <p v-else class="text-[11px] text-gray-500">
-              <span class="text-blue-500 cursor-pointer hover:text-blue-600" @click="openAuthDialog(true)">登录</span> 或 
-              <span class="text-blue-500 cursor-pointer hover:text-blue-600" @click="openAuthDialog(false)">注册</span> 后即可使用对话功能
+              <span class="text-blue-600 cursor-pointer hover:text-blue-700 font-medium" @click="openAuthDialog(true)">登录</span> 或 
+              <span class="text-blue-600 cursor-pointer hover:text-blue-700 font-medium" @click="openAuthDialog(false)">注册</span> 后即可使用
             </p>
           </div>
         </div>
@@ -801,97 +818,3 @@ onMounted(() => {
   }
 })
 </script>
-
-<style scoped>
-/* 消息进入动画 */
-.message-enter-active,
-.message-leave-active {
-  transition: all 0.3s ease;
-}
-
-.message-enter-from {
-  opacity: 0;
-  transform: translateY(10px);
-}
-
-.message-leave-to {
-  opacity: 0;
-  transform: translateY(-10px);
-}
-
-/* 淡入动画 */
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-out;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* 加载动画 */
-.loading-dots {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  height: 20px;
-}
-
-.loading-dots span {
-  width: 6px;
-  height: 6px;
-  background: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  border-radius: 50%;
-  animation: loading 1.4s infinite ease-in-out both;
-}
-
-.loading-dots span:nth-child(1) {
-  animation-delay: -0.32s;
-}
-
-.loading-dots span:nth-child(2) {
-  animation-delay: -0.16s;
-}
-
-@keyframes loading {
-  0%, 80%, 100% {
-    transform: scale(0.6);
-    opacity: 0.5;
-  }
-  40% {
-    transform: scale(1);
-    opacity: 1;
-  }
-}
-
-/* 滚动条样式 */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
-}
-
-/* 选中文字样式 */
-::selection {
-  background: rgba(59, 130, 246, 0.2);
-  color: inherit;
-}
-</style>
