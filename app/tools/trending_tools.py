@@ -69,4 +69,8 @@ class TrendingSearchTool(BaseTool):
 
     def _run(self, language: str = "", since: str = "weekly", limit: int = 10) -> str:
         import asyncio
-        return asyncio.run(self._arun(language, since, limit))
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self._arun(language, since, limit))
+        raise RuntimeError("_run() cannot be called from async context, use _arun() instead")

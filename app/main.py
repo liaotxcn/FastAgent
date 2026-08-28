@@ -50,7 +50,7 @@ async def rate_limit_middleware(request: Request, call_next):
             # 设置初始值并过期时间
             await redis_client.setex(key, 60, 1)
     except Exception as e:
-        pass
+            logger.warning(f"Rate limit check failed (Redis may be unavailable): {e}")
     
     response = await call_next(request)
     return response

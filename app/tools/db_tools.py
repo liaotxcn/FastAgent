@@ -78,7 +78,10 @@ class DatabaseQueryTool(BaseTool):
                 return f"Error executing query: {str(e)}"
     
     def _run(self, query: str, params: Optional[dict] = None, limit: int = None) -> str:
-        """同步执行数据库查询"""
         logger.info(f"Synchronously executing database query: {query[:100]}...")
         import asyncio
-        return asyncio.run(self._arun(query, params, limit))
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self._arun(query, params, limit))
+        raise RuntimeError("_run() cannot be called from async context, use _arun() instead")

@@ -43,4 +43,8 @@ class MCPToolWrapper(BaseTool):
     def _run(self, tool_name: str, parameters: dict) -> str:
         logger.info(f"Synchronously executing MCP tool: {tool_name}")
         import asyncio
-        return asyncio.run(self._arun(tool_name, parameters))
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self._arun(tool_name, parameters))
+        raise RuntimeError("_run() cannot be called from async context, use _arun() instead")
