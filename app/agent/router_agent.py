@@ -8,6 +8,7 @@ from app.agent.mcp_agent import MCPAgent
 from app.agent.general_agent import GeneralAgent
 from app.agent.vision_agent import VisionAgent
 from app.agent.map_agent import MapAgent
+from app.agent.trending_agent import TrendingAgent
 from app.services.redis_service import redis_service
 from loguru import logger
 import json
@@ -81,6 +82,8 @@ class RouterAgent:
                 self._agent_cache[agent_type] = VisionAgent()
             elif agent_type == "map":
                 self._agent_cache[agent_type] = MapAgent()
+            elif agent_type == "trending":
+                self._agent_cache[agent_type] = TrendingAgent()
             else:
                 self._agent_cache[agent_type] = GeneralAgent()
         return self._agent_cache[agent_type]

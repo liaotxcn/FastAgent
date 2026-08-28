@@ -25,6 +25,11 @@ AGENT_REGISTRY: Dict[str, Dict[str, Any]] = {
         "class": "GeneralAgent",
         "description": "处理一般性对话、问答、闲聊等不需要特定工具的问题",
         "keywords": ["你好", "是什么", "怎么", "为什么", "介绍", "帮助"]
+    },
+    "trending": {
+        "class": "TrendingAgent",
+        "description": "检索 GitHub 近期热门开源项目，可按语言和时间范围过滤",
+        "keywords": ["开源", "热门", "GitHub", "github", "趋势", "trending", "项目推荐", "推荐项目", "AI项目", "框架", "库"]
     }
 }
 
