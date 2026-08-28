@@ -81,11 +81,18 @@ async def warmup_cache():
             await redis_client.setex("agent:descriptions", 3600, agent_descriptions)
         
         # 4. 预热工具列表
+        from app.agent.registry import AGENT_REGISTRY
+        from app.agent.base import ToolAgent
         from app.agent.general_agent import GeneralAgent
-        from app.agent.db_agent import DatabaseAgent
-        from app.agent.mcp_agent import MCPAgent
-        
-        agents = [GeneralAgent(), DatabaseAgent(), MCPAgent()]
+
+        agents = [GeneralAgent()]
+        for agent_type, info in AGENT_REGISTRY.items():
+            if info.get("class") == "ToolAgent":
+                agents.append(ToolAgent(
+                    tools=info["tools"](),
+                    system_prompt=info["system_prompt"]
+                ))
+
         for agent in agents:
             tools = agent._get_tools()
             if tools:

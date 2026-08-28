@@ -2,13 +2,10 @@ from typing import Dict, Any, Optional, List, AsyncGenerator
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import PromptTemplate
 from app.config import settings
-from app.agent.registry import get_agent_descriptions
-from app.agent.db_agent import DatabaseAgent
-from app.agent.mcp_agent import MCPAgent
+from app.agent.registry import get_agent_descriptions, get_agent_info
+from app.agent.base import ToolAgent
 from app.agent.general_agent import GeneralAgent
 from app.agent.vision_agent import VisionAgent
-from app.agent.map_agent import MapAgent
-from app.agent.trending_agent import TrendingAgent
 from app.services.redis_service import redis_service
 from loguru import logger
 import json
@@ -74,16 +71,18 @@ class RouterAgent:
     
     def _get_agent(self, agent_type: str):
         if agent_type not in self._agent_cache:
-            if agent_type == "database":
-                self._agent_cache[agent_type] = DatabaseAgent()
-            elif agent_type == "mcp":
-                self._agent_cache[agent_type] = MCPAgent()
-            elif agent_type == "vision":
+            info = get_agent_info(agent_type)
+            agent_class = info.get("class")
+
+            if agent_class == "ToolAgent":
+                self._agent_cache[agent_type] = ToolAgent(
+                    tools=info["tools"](),
+                    system_prompt=info["system_prompt"]
+                )
+            elif agent_class == "GeneralAgent":
+                self._agent_cache[agent_type] = GeneralAgent()
+            elif agent_class == "VisionAgent":
                 self._agent_cache[agent_type] = VisionAgent()
-            elif agent_type == "map":
-                self._agent_cache[agent_type] = MapAgent()
-            elif agent_type == "trending":
-                self._agent_cache[agent_type] = TrendingAgent()
             else:
                 self._agent_cache[agent_type] = GeneralAgent()
         return self._agent_cache[agent_type]
