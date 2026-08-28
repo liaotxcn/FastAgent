@@ -68,6 +68,7 @@ class RouterAgent:
             openai_api_base=settings.modelscope_api_base
         )
         self._agent_cache = {}
+        self._route_cache = {}
     
     def _get_agent(self, agent_type: str):
         if agent_type not in self._agent_cache:
@@ -86,6 +87,40 @@ class RouterAgent:
             else:
                 self._agent_cache[agent_type] = GeneralAgent()
         return self._agent_cache[agent_type]
+    
+    def _keyword_match(self, user_question: str) -> Optional[Dict[str, Any]]:
+        """Tier 1: 关键词匹配路由，返回 None 表示需要 LLM 路由"""
+        from app.agent.registry import AGENT_REGISTRY
+        question_lower = user_question.lower()
+        scores = {}
+        for agent_type, info in AGENT_REGISTRY.items():
+            keywords = info.get("keywords", [])
+            score = sum(1 for kw in keywords if kw.lower() in question_lower)
+            if score > 0:
+                scores[agent_type] = score
+        if not scores:
+            return None
+        sorted_agents = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+        best_agent, best_score = sorted_agents[0]
+        second_score = sorted_agents[1][1] if len(sorted_agents) > 1 else 0
+        if (best_score >= 2 and best_score - second_score >= 2) or len(scores) == 1:
+            logger.info(f"Keyword match: {best_agent} (score={best_score})")
+            return {"agent_type": best_agent, "reason": f"关键词匹配 (score={best_score})", "task": user_question}
+        return None
+
+    async def _smart_route(self, user_question: str) -> Dict[str, Any]:
+        """分级路由：关键词匹配优先，LLM 兜底，含缓存"""
+        cache_key = user_question.strip().lower()
+        if cache_key in self._route_cache:
+            logger.info(f"Route cache hit: {self._route_cache[cache_key]['agent_type']}")
+            return self._route_cache[cache_key]
+        result = self._keyword_match(user_question)
+        if result is None:
+            result = await self._route(user_question)
+        if len(self._route_cache) >= 100:
+            self._route_cache.pop(next(iter(self._route_cache)))
+        self._route_cache[cache_key] = result
+        return result
     
     async def _route(self, user_question: str) -> Dict[str, Any]:
         prompt = PromptTemplate(
@@ -169,7 +204,7 @@ class RouterAgent:
                 logger.info(f"{len(valid_images)} images detected, routing to VisionAgent")
             else:
                 # 当没有有效图像时，使用通用Agent
-                route_result = await self._route(user_question)
+                route_result = await self._smart_route(user_question)
                 logger.info(f"Routed to {route_result['agent_type']}")
             
             agent = self._get_agent(route_result["agent_type"])
@@ -258,7 +293,7 @@ class RouterAgent:
                 logger.info(f"{len(valid_images)} images detected, routing to VisionAgent")
             else:
                 yield {"type": "status", "content": "正在分析问题..."}
-                route_result = await self._route(user_question)
+                route_result = await self._smart_route(user_question)
                 logger.info(f"Routed to {route_result['agent_type']}")
             
             agent = self._get_agent(route_result["agent_type"])
