@@ -3,8 +3,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.schemas import AgentResponse, AgentExecuteRequest, MCPToolRequest, DatabaseQueryRequest, ChatRequest, RegisterRequest, LoginRequest, AuthResponse
-from app.agent.mcp_agent import MCPAgent
-from app.agent.db_agent import DatabaseAgent
+from app.agent.registry import get_agent_info
+from app.agent.base import ToolAgent
 from app.agent.router_agent import RouterAgent
 from app.services.redis_service import redis_service
 from app.services.auth_service import auth_service
@@ -77,18 +77,22 @@ async def send_code(email: str, db: AsyncSession = Depends(get_db)):
 @router.post("/agent/execute", response_model=AgentResponse)
 async def execute_agent(request: AgentExecuteRequest):
     try:
-        if request.agent_type == "mcp":
-            agent = MCPAgent()
-        elif request.agent_type == "database":
-            agent = DatabaseAgent()
+        info = get_agent_info(request.agent_type)
+        agent_class = info.get("class")
+
+        if agent_class == "ToolAgent":
+            agent = ToolAgent(
+                tools=info["tools"](),
+                system_prompt=info["system_prompt"]
+            )
+        elif request.agent_type == "general":
+            from app.agent.general_agent import GeneralAgent
+            agent = GeneralAgent()
         else:
             return AgentResponse(
                 success=False,
                 message="Unknown agent type",
-                data={
-                    "input": request.task,
-                    "output": ""
-                },
+                data={"input": request.task, "output": ""},
                 error=f"Unknown agent type: {request.agent_type}"
             )
         

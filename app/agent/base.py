@@ -799,3 +799,18 @@ class BaseAgent(ABC):
                 },
                 "error": str(e)
             }
+
+
+class ToolAgent(BaseAgent):
+    """通用工具型 Agent，通过配置即可创建，无需新建子类文件"""
+
+    def __init__(self, tools: list, system_prompt: str, model_name=None, temperature=None):
+        self._tools = tools
+        self._system_prompt = system_prompt
+        super().__init__(model_name, temperature)
+
+    def _get_tools(self) -> list:
+        return self._tools
+
+    def _get_system_prompt(self) -> str:
+        return self._system_prompt

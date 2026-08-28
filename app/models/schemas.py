@@ -82,15 +82,13 @@ class AgentExecuteRequest(BaseModel):
     agent_type: str = Field(
         ..., 
         description="Type of agent to use",
-        pattern=r'^(mcp|database|general)$'
-
-
+        pattern=r'^(database|mcp|trending|map|general)$'
     )
     context: Optional[Dict[str, Any]] = None
     
     @validator('agent_type')
     def validate_agent_type(cls, v):
-        valid_types = ['mcp', 'database']
+        valid_types = ['database', 'mcp', 'trending', 'map', 'general']
         if v not in valid_types:
             raise ValueError(f"Invalid agent type, must be one of: {valid_types}")
         return v

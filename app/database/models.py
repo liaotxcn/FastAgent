@@ -45,7 +45,7 @@ class EmailVerification(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String(100), nullable=False, index=True)
-    code = Column(String(6), nullable=False)
+    code = Column(String(64), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

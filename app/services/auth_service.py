@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 from sqlalchemy.exc import IntegrityError
 from passlib.context import CryptContext
+import hashlib
 import secrets
 import smtplib
 from email.mime.text import MIMEText
@@ -34,6 +35,19 @@ class AuthService:
         return ''.join(secrets.choice('0123456789') for _ in range(6))
     
     @staticmethod
+    def _hash_code(code: str) -> str:
+        """对验证码进行 SHA-256 哈希"""
+        return hashlib.sha256(code.encode()).hexdigest()
+    
+    @staticmethod
+    def _mask_email(email: str) -> str:
+        """邮箱脱敏，仅显示首字符和域名"""
+        if '@' not in email:
+            return email
+        name, domain = email.split('@', 1)
+        return f"{name[0]}***@{domain}"
+    
+    @staticmethod
     async def send_email_code(email: str, code: str) -> bool:
         """发送邮箱验证码"""
         try:
@@ -51,7 +65,7 @@ class AuthService:
                 server.login(settings.smtp_username, settings.smtp_password)
                 server.send_message(msg)
             
-            logger.info(f"验证码 {code} 已发送至邮箱 {email}")
+            logger.info(f"验证码已发送至邮箱 {AuthService._mask_email(email)}")
             return True
         except Exception as e:
             logger.error(f"发送验证码失败: {e}")
@@ -59,7 +73,7 @@ class AuthService:
     
     @staticmethod
     async def create_email_verification(db: AsyncSession, email: str) -> str:
-        """创建邮箱验证码"""
+        """创建邮箱验证码，返回明文验证码（仅用于发送邮件），数据库存储 SHA-256 哈希"""
         # 生成验证码
         code = AuthService.generate_email_code()
         
@@ -71,10 +85,10 @@ class AuthService:
             select(EmailVerification).where(EmailVerification.email == email)
         )
         
-        # 创建新验证码
+        # 创建新验证码，存储哈希值
         verification = EmailVerification(
             email=email,
-            code=code,
+            code=AuthService._hash_code(code),
             expires_at=expires_at
         )
         
@@ -89,12 +103,14 @@ class AuthService:
     
     @staticmethod
     async def verify_email_code(db: AsyncSession, email: str, code: str) -> bool:
-        """验证邮箱验证码"""
+        """验证邮箱验证码（哈希比对）"""
+        hashed = AuthService._hash_code(code)
+        
         # 查询验证码
         result = await db.execute(
             select(EmailVerification).where(
                 EmailVerification.email == email,
-                EmailVerification.code == code,
+                EmailVerification.code == hashed,
                 EmailVerification.expires_at > datetime.utcnow()
             )
         )

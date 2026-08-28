@@ -59,6 +59,9 @@ class Settings(BaseSettings):
     smtp_username: str 
     smtp_password: str 
     
+    # GitHub 配置（可选，用于提升 API 限额）
+    github_token: str = ""
+    
     class Config:
         env_file = ".env"
         case_sensitive = False
