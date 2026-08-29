@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional, AsyncGenerator, List, Tuple
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
-from langchain_core.prompts import PromptTemplate
 from app.config import settings
 from app.database.connection import AsyncSessionLocal
 from app.database.models import AgentCallHistory
@@ -12,6 +11,7 @@ import json
 from langchain_core.messages import BaseMessage
 import time
 from datetime import datetime
+import tiktoken
 
 
 def serialize_message(message):
@@ -39,7 +39,8 @@ class HarnessContextManager:
     """上下文边界管理器"""
     def __init__(self):
         self.context_rules = {}
-        self.max_context_length = 4096
+        self.max_context_tokens = 4096
+        self._tokenizer = tiktoken.get_encoding("cl100k_base")
     
     def build_context(self, task: str, history: Optional[List[Dict]] = None, constraints: Optional[Dict] = None) -> Dict:
         """构建结构化上下文"""
@@ -52,24 +53,24 @@ class HarnessContextManager:
         self._trim_context(context)
         return context
     
+    def _count_tokens(self, text: str) -> int:
+        """计算文本的 token 数量"""
+        return len(self._tokenizer.encode(str(text)))
+    
     def _trim_context(self, context: Dict):
-        """裁剪上下文以符合长度限制"""
-        if not isinstance(context, dict):
+        """基于 token 数量裁剪上下文"""
+        if not isinstance(context, dict) or not context.get("history"):
             return
         
-        if not context.get("history"):
-            return
-        
-        total_length = len(str(context["task"])) + len(str(context["constraints"]))
+        total_tokens = self._count_tokens(str(context["task"])) + self._count_tokens(str(context["constraints"]))
         history = context["history"]
         trimmed_history = []
         
-        # 从最近消息开始，累加长度
         for msg in reversed(history):
-            msg_length = len(str(msg))
-            if total_length + msg_length <= self.max_context_length:
+            msg_tokens = self._count_tokens(str(msg))
+            if total_tokens + msg_tokens <= self.max_context_tokens:
                 trimmed_history.insert(0, msg)
-                total_length += msg_length
+                total_tokens += msg_tokens
             else:
                 break
         
@@ -107,66 +108,6 @@ class HarnessToolManager:
     def _extract_keywords(self, text: str) -> List[str]:
         """从文本中提取关键词"""
         return [word.lower() for word in text.split() if len(word) > 3]
-
-
-class HarnessExecutionManager:
-    """执行编排管理器"""
-    def __init__(self):
-        self.execution_steps = [
-            "目标理解",
-            "信息检查",
-            "分析处理",
-            "输出生成",
-            "结果检查",
-            "修正迭代"
-        ]
-    
-    def execute_task(self, agent, task: str, context: Dict) -> Dict:
-        """执行任务并跟踪执行状态"""
-        execution_state = {
-            "steps": [],
-            "start_time": time.time(),
-            "status": "running"
-        }
-        
-        for step in self.execution_steps:
-            step_start = time.time()
-            execution_state["steps"].append({
-                "name": step,
-                "status": "in_progress",
-                "start_time": step_start
-            })
-            
-            # 执行步骤逻辑
-            if step == "目标理解":
-                # 目标理解逻辑
-                pass
-            elif step == "信息检查":
-                # 信息检查逻辑
-                pass
-            elif step == "分析处理":
-                # 分析处理逻辑
-                pass
-            elif step == "输出生成":
-                # 输出生成逻辑
-                pass
-            elif step == "结果检查":
-                # 结果检查逻辑
-                pass
-            elif step == "修正迭代":
-                # 修正迭代逻辑
-                pass
-            
-            step_end = time.time()
-            execution_state["steps"][-1]["status"] = "completed"
-            execution_state["steps"][-1]["end_time"] = step_end
-            execution_state["steps"][-1]["duration"] = step_end - step_start
-        
-        execution_state["end_time"] = time.time()
-        execution_state["duration"] = execution_state["end_time"] - execution_state["start_time"]
-        execution_state["status"] = "completed"
-        
-        return execution_state
 
 
 class HarnessMemoryManager:
@@ -210,7 +151,6 @@ class HarnessEvaluationManager:
         evaluation = {
             "task_relevance": self._evaluate_relevance(task, result),
             "completeness": self._evaluate_completeness(result),
-            "accuracy": self._evaluate_accuracy(result),
             "timeliness": self._evaluate_timeliness(result)
         }
         
@@ -235,10 +175,6 @@ class HarnessEvaluationManager:
         """评估结果的完整性"""
         output = result.get("output", "")
         return min(1.0, len(output) / 500)  
-    
-    def _evaluate_accuracy(self, result: Dict) -> float:
-        """评估结果的准确性"""
-        return 0.8  # 默认值，可根据实际情况调整
     
     def _evaluate_timeliness(self, result: Dict) -> float:
         """评估执行的及时性"""
@@ -299,7 +235,6 @@ class BaseAgent(ABC):
         # 初始化 Harness 管理器
         self.context_manager = HarnessContextManager()
         self.tool_manager = HarnessToolManager(self.tools)
-        self.execution_manager = HarnessExecutionManager()
         self.memory_manager = HarnessMemoryManager()
         self.evaluation_manager = HarnessEvaluationManager()
         self.constraint_manager = HarnessConstraintManager()
@@ -322,6 +257,28 @@ class BaseAgent(ABC):
         )
         
         return agent
+    
+    @staticmethod
+    def _parse_history(history):
+        """将历史消息解析为统一的消息列表格式"""
+        messages = []
+        if not history:
+            return messages
+        if isinstance(history, str):
+            for line in history.split('\n'):
+                if line:
+                    if ': ' in line:
+                        role, content = line.split(': ', 1)
+                        messages.append({"role": role, "content": content})
+                    else:
+                        messages.append({"role": "user", "content": line})
+        elif isinstance(history, list):
+            for msg in history:
+                if isinstance(msg, dict):
+                    messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
+                else:
+                    messages.append({"role": "user", "content": str(msg)})
+        return messages
     
     @abstractmethod
     def _get_system_prompt(self) -> str:
@@ -369,34 +326,12 @@ class BaseAgent(ABC):
                 await session.refresh(history)
                 history_id = history.id
             
-            # 4. 执行任务并跟踪执行状态
-            execution_state = self.execution_manager.execute_task(self, task, structured_context)
+            # 4. 执行任务
+            execution_state = {"start_time": time.time()}
             
             # 若有工具 --> 使用 agent 流式执行
             if self.tools:
-                # 构建消息列表，包含历史消息
-                messages = []
-                if structured_context.get("history"):
-                    history = structured_context["history"]
-                    # 处理字符串类型的 history
-                    if isinstance(history, str):
-                        # 将字符串分割为消息列表
-                        message_lines = history.split('\n')
-                        for line in message_lines:
-                            if line:
-                                # 解析角色和内容
-                                if ': ' in line:
-                                    role, content = line.split(': ', 1)
-                                    messages.append({"role": role, "content": content})
-                                else:
-                                    messages.append({"role": "user", "content": line})
-                    # 处理字典列表类型的 history
-                    elif isinstance(history, list):
-                        for msg in history:
-                            if isinstance(msg, dict):
-                                messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
-                            else:
-                                messages.append({"role": "user", "content": str(msg)})
+                messages = self._parse_history(structured_context.get("history"))
                 messages.append({"role": "user", "content": task})
                 
                 async for event in self.agent.astream_events(
@@ -411,36 +346,9 @@ class BaseAgent(ABC):
                                 full_response += content
                                 yield content
             else:
-                # 若无工具 --> 使用 LLM
                 system_prompt = self._get_system_prompt()
-                messages = [
-                    {"role": "system", "content": system_prompt}
-                ]
-                
-                # 添加历史消息
-                if structured_context.get("history"):
-                    history = structured_context["history"]
-                    # 处理字符串类型的 history
-                    if isinstance(history, str):
-                        # 将字符串分割为消息列表
-                        message_lines = history.split('\n')
-                        for line in message_lines:
-                            if line:
-                                # 解析角色和内容
-                                if ': ' in line:
-                                    role, content = line.split(': ', 1)
-                                    messages.append({"role": role, "content": content})
-                                else:
-                                    messages.append({"role": "user", "content": line})
-                    # 处理字典列表类型的 history
-                    elif isinstance(history, list):
-                        for msg in history:
-                            if isinstance(msg, dict):
-                                messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
-                            else:
-                                messages.append({"role": "user", "content": str(msg)})
-                
-                # 添加当前任务
+                messages = [{"role": "system", "content": system_prompt}]
+                messages.extend(self._parse_history(structured_context.get("history")))
                 messages.append({"role": "user", "content": task})
                 
                 async for chunk in self.llm.astream(messages):
@@ -455,6 +363,7 @@ class BaseAgent(ABC):
                 return
             
             # 6. 评估执行结果
+            execution_state["duration"] = time.time() - execution_state["start_time"]
             data = {"input": task, "output": full_response, "execution_state": execution_state}
             evaluation = self.evaluation_manager.evaluate_result(task, data)
             data["evaluation"] = evaluation
@@ -586,32 +495,10 @@ class BaseAgent(ABC):
                 await session.refresh(history)
                 history_id = history.id
             
-            # 4. 执行任务并跟踪执行状态
-            execution_state = self.execution_manager.execute_task(self, task, structured_context)
+            # 4. 执行任务
+            execution_state = {"start_time": time.time()}
             
-            # 构建消息列表，包含历史消息
-            messages = []
-            if structured_context.get("history"):
-                history = structured_context["history"]
-                # 处理字符串类型的 history
-                if isinstance(history, str):
-                    # 将字符串分割为消息列表
-                    message_lines = history.split('\n')
-                    for line in message_lines:
-                        if line:
-                            # 尝试解析角色和内容
-                            if ': ' in line:
-                                role, content = line.split(': ', 1)
-                                messages.append({"role": role, "content": content})
-                            else:
-                                messages.append({"role": "user", "content": line})
-                # 处理字典列表类型的 history
-                elif isinstance(history, list):
-                    for msg in history:
-                        if isinstance(msg, dict):
-                            messages.append({"role": msg.get("role", "user"), "content": msg.get("content", "")})
-                        else:
-                            messages.append({"role": "user", "content": str(msg)})
+            messages = self._parse_history(structured_context.get("history"))
             messages.append({"role": "user", "content": task})
             
             result = await self.agent.ainvoke({
@@ -650,6 +537,7 @@ class BaseAgent(ABC):
             # 7. 评估执行结果
             evaluation = self.evaluation_manager.evaluate_result(task, data)
             data["evaluation"] = evaluation
+            execution_state["duration"] = time.time() - execution_state["start_time"]
             data["execution_state"] = execution_state
             
             # 8. 存储执行历史和记忆
